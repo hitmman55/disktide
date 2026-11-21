@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import humanize
 from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 
+from disktide.i18n import diagnostic, format_size, status_label, translate
 from disktide.keys import PLAN, SELECT
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Header, Static
@@ -53,13 +53,49 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
         # something to the plan, and the map it focuses is on screen and
         # reachable with `tab`; the other three have nothing else that offers
         # them. It is still in `?` and in the command palette.
-        Binding("space", "toggle_select", "Toggle candidate", show=True, group=SELECT, id="cleanup.toggle"),
-        Binding("a", "select_all", "Select all", show=True, group=SELECT, id="cleanup.select_all"),
-        Binding("p", "delete_selected", "Review delete plan", show=True, group=PLAN, id="cleanup.review_plan"),
-        Binding("z", "undo_last", "Undo last plan", show=True, group=PLAN, id="cleanup.undo"),
-        Binding("h", "show_history", "History", show=True, id="cleanup.history"),
-        Binding("m", "focus_map", "Map", show=False, id="cleanup.map"),
-        Binding("r", "refresh_targets", "Refresh", show=False, id="cleanup.refresh"),
+        Binding(
+            "space",
+            "toggle_select",
+            translate("Toggle candidate"),
+            show=True,
+            group=SELECT,
+            id="cleanup.toggle",
+        ),
+        Binding(
+            "a",
+            "select_all",
+            translate("Select all"),
+            show=True,
+            group=SELECT,
+            id="cleanup.select_all",
+        ),
+        Binding(
+            "p",
+            "delete_selected",
+            translate("Review delete plan"),
+            show=True,
+            group=PLAN,
+            id="cleanup.review_plan",
+        ),
+        Binding(
+            "z",
+            "undo_last",
+            translate("Undo last plan"),
+            show=True,
+            group=PLAN,
+            id="cleanup.undo",
+        ),
+        Binding(
+            "h", "show_history", translate("History"), show=True, id="cleanup.history"
+        ),
+        Binding("m", "focus_map", translate("Map"), show=False, id="cleanup.map"),
+        Binding(
+            "r",
+            "refresh_targets",
+            translate("Refresh"),
+            show=False,
+            id="cleanup.refresh",
+        ),
     ]
 
     DEFAULT_CSS = """
@@ -108,15 +144,15 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
         table.cursor_type = "row"
         table.add_columns(
             "  ",
-            "Pack",
-            "Category",
-            "Path",
-            "Estimated",
-            "Age",
-            "Score",
-            "Confidence",
-            "Risk",
-            "Default action",
+            translate("Pack"),
+            translate("Category"),
+            translate("Path"),
+            translate("Estimated"),
+            translate("Age"),
+            translate("Score"),
+            translate("Confidence"),
+            translate("Risk"),
+            translate("Default action"),
         )
         yield table
         yield Footer()
@@ -151,7 +187,7 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
         safe_action_label = (
             "quarantine"
             if self._safe_action is CleanupActionKind.QUARANTINE
-            else "Trash → quarantine"
+            else translate("Trash → quarantine")
         )
         for target in self._targets:
             selected = "✓" if target.path in self._selected else " "
@@ -161,22 +197,22 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
                 RiskLevel.DANGEROUS: ink("error_strong"),
             }[target.risk]
             action_label = (
-                "Detection only"
+                translate("Detection only")
                 if target.detection_only
-                else "Preview first"
+                else translate("Preview first")
                 if target.rule.default_action is CleanupRuleActionPolicy.PREVIEW
                 else safe_action_label
             )
             table.add_row(
                 selected,
                 f"{target.pack_name}@{target.rule.pack_version}",
-                target.category,
+                status_label(target.category),
                 _truncate_path(target.path, 48),
-                humanize.naturalsize(target.size, binary=True),
-                f"{target.age_days:.1f}d",
+                format_size(target.size, binary=True),
+                translate("{age_days}d").format(age_days=f"{target.age_days:.1f}"),
                 f"{target.score:.1f}",
                 f"{target.confidence:.0%}",
-                Text(target.risk.value, style=risk_style),
+                Text(status_label(target.risk.value), style=risk_style),
                 action_label,
                 key=target.path,
             )
@@ -191,29 +227,44 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
             if target.path in self._selected
         )
         plan_text = (
-            f" | Plan: {self._current_plan_id[:12]}"
+            translate(" | Plan: {value}").format(value=self._current_plan_id[:12])
             if self._current_plan_id
             else ""
         )
         top = self._targets[0] if self._targets else None
         top_text = (
-            f" | Top: {top.pack_name}/{top.category} score {top.score:.1f} "
-            f"({top.confidence:.0%})"
+            translate(
+                " | Top: {pack_name}/{category} score {score} ({confidence})"
+            ).format(
+                pack_name=top.pack_name,
+                category=top.category,
+                score=f"{top.score:.1f}",
+                confidence=f"{top.confidence:.0%}",
+            )
             if top is not None
             else ""
         )
         issue_text = (
-            f" | {self._rule_issue_count} isolated rule-pack error(s)"
+            translate(" | {_rule_issue_count} isolated rule-pack error(s)").format(
+                _rule_issue_count=self._rule_issue_count,
+            )
             if self._rule_issue_count
             else ""
         )
         summary.update(
-            f"  {len(self._targets)} candidate(s) | Raw estimate: "
-            f"{humanize.naturalsize(total, binary=True)} | Selected: "
-            f"{humanize.naturalsize(selected_size, binary=True)} "
-            f"({len(self._selected)}){plan_text}{top_text}{issue_text}\n"
-            "  Score only ranks opportunities; plan revalidation decides safety. "
-            "[m] focuses the Age/Size map."
+            translate(
+                "  {len} candidate(s) | Raw estimate: {naturalsize} | Selected: {naturalsize_} "
+                "({len_}){plan_text}{top_text}{issue_text}\n  Score only ranks opportunities; plan "
+                "revalidation decides safety. [m] focuses the Age/Size map."
+            ).format(
+                len=len(self._targets),
+                naturalsize=format_size(total, binary=True),
+                naturalsize_=format_size(selected_size, binary=True),
+                len_=len(self._selected),
+                plan_text=plan_text,
+                top_text=top_text,
+                issue_text=issue_text,
+            )
         )
 
     @on(DataTable.RowHighlighted, "#cleanup-table")
@@ -267,10 +318,14 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
             target for target in self._targets if target.path in self._selected
         ]
         if not selected or self._root is None:
-            self.notify("Select at least one cleanup candidate", severity="warning")
+            self.notify(
+                translate("Select at least one cleanup candidate"), severity="warning"
+            )
             return
         if self._service is None:
-            self.notify("Cleanup persistence is unavailable", severity="error")
+            self.notify(
+                translate("Cleanup persistence is unavailable"), severity="error"
+            )
             return
         try:
             plan = self._service.create_plan(
@@ -279,7 +334,7 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
                 provenance="tui-explorer",
             )
         except CleanupError as exc:
-            self.notify(str(exc), severity="error")
+            self.notify(diagnostic(str(exc)), severity="error")
             return
         self._current_plan_id = plan.id
         self._update_summary()
@@ -293,7 +348,9 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
             return
         if result.action is CleanupActionKind.PREVIEW:
             self.notify(
-                f"Plan {self._current_plan_id[:12]} saved; no filesystem changes made."
+                translate("Plan {value} saved; no filesystem changes made.").format(
+                    value=self._current_plan_id[:12],
+                )
             )
             return
         action = (
@@ -324,7 +381,7 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
         except CleanupError as exc:
             self.app.call_from_thread(
                 self.notify,
-                str(exc),
+                diagnostic(str(exc)),
                 severity="error",
             )
             return
@@ -337,10 +394,18 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
             for action in plan.actions
         )
         self.notify(
-            f"Plan {plan.id[:12]} {plan.status.value}: "
-            f"{plan.succeeded_count} succeeded, {plan.skipped_count} skipped, "
-            f"{plan.failed_count} failed; {isolated} isolated; actual reclaimed "
-            f"{humanize.naturalsize(plan.actual_reclaimed_bytes, binary=True)}.",
+            translate(
+                "Plan {value} {value_}: {succeeded_count} succeeded, {skipped_count} skipped, "
+                "{failed_count} failed; {isolated} isolated; actual reclaimed {naturalsize}."
+            ).format(
+                value=plan.id[:12],
+                value_=status_label(plan.status.value),
+                succeeded_count=plan.succeeded_count,
+                skipped_count=plan.skipped_count,
+                failed_count=plan.failed_count,
+                isolated=isolated,
+                naturalsize=format_size(plan.actual_reclaimed_bytes, binary=True),
+            ),
             severity="warning" if plan.failed_count else "information",
         )
         completed_paths = {
@@ -373,7 +438,9 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
             None,
         )
         if plan is None:
-            self.notify("No recoverable cleanup action found", severity="warning")
+            self.notify(
+                translate("No recoverable cleanup action found"), severity="warning"
+            )
             return
         self._undo_plan(plan.id)
 
@@ -385,7 +452,7 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
         except CleanupError as exc:
             self.app.call_from_thread(
                 self.notify,
-                str(exc),
+                diagnostic(str(exc)),
                 severity="error",
             )
             return
@@ -399,7 +466,7 @@ class CleanupScreen(RenderEpochRefreshMixin, Screen):
             return
         summaries = self._service.savings_history(group_by="category")
         if not summaries:
-            self.notify("No cleanup history recorded")
+            self.notify(translate("No cleanup history recorded"))
             return
         self.app.push_screen(CleanupHistoryModal(summaries))
 

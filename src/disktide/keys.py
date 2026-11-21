@@ -31,6 +31,8 @@ import re
 
 from textual.binding import Binding
 
+from disktide.i18n import translate
+
 __all__ = [
     "ACTION",
     "ALERT",
@@ -73,16 +75,16 @@ __all__ = [
 # because they are the vocabulary a new grouped binding picks a label from.
 # --------------------------------------------------------------------------
 
-MODE = Binding.Group("Mode", compact=True)
-NAV = Binding.Group("Nav", compact=False)
-VIEW = Binding.Group("View", compact=False)
-ACTION = Binding.Group("Action", compact=False)
-PLAN = Binding.Group("Plan", compact=False)
-SELECT = Binding.Group("Select", compact=False)
-ALERT = Binding.Group("Alert", compact=False)
-SNAPSHOT = Binding.Group("Snapshot", compact=False)
-TREND = Binding.Group("Trend", compact=False)
-DIFF = Binding.Group("Diff", compact=False)
+MODE = Binding.Group(translate("Mode"), compact=True)
+NAV = Binding.Group(translate("Nav"), compact=False)
+VIEW = Binding.Group(translate("View"), compact=False)
+ACTION = Binding.Group(translate("Action"), compact=False)
+PLAN = Binding.Group(translate("Plan"), compact=False)
+SELECT = Binding.Group(translate("Select"), compact=False)
+ALERT = Binding.Group(translate("Alert"), compact=False)
+SNAPSHOT = Binding.Group(translate("Snapshot"), compact=False)
+TREND = Binding.Group(translate("Trend"), compact=False)
+DIFF = Binding.Group(translate("Diff"), compact=False)
 
 
 # --------------------------------------------------------------------------

@@ -12,6 +12,7 @@ from rich.cells import cell_len
 from rich.style import Style
 from rich.text import Text
 
+from disktide.i18n import translate
 from disktide.metrics import (
     DEFAULT_METRIC,
     METRICS,
@@ -65,7 +66,7 @@ class SizeTree(Tree[FSNode]):
         Binding(
             "enter",
             "expand_or_collapse",
-            "Expand/collapse",
+            translate("Expand/collapse"),
             show=False,
             id="explorer.expand",
         ),
@@ -519,12 +520,12 @@ class SizeTree(Tree[FSNode]):
         if node.is_dir:
             text.append(f"{node.name}/", style=ink("dir"))
             if node.is_loop:
-                text.append(" (loop)", style=ink("warning_strong"))
+                text.append(translate(" (loop)"), style=ink("warning_strong"))
             elif node.vanished:
                 # Dim, not a warning colour: the directory was removed while
                 # the scan ran, which is a fact about the tree rather than
                 # something the user has to act on.
-                text.append(" (gone)", style=ink("muted"))
+                text.append(translate(" (gone)"), style=ink("muted"))
         elif node.is_symlink:
             text.append(node.name, style=ink("link"))
             if node.link_target:
@@ -533,7 +534,7 @@ class SizeTree(Tree[FSNode]):
                     target = target.rstrip("/") + "/"
                 text.append(f" {link_arrow()} {target}", style="dim")
             if node.link_broken:
-                text.append(" (broken)", style=ink("error_strong"))
+                text.append(translate(" (broken)"), style=ink("error_strong"))
         else:
             text.append(node.name, style=ink("file"))
 
@@ -557,10 +558,10 @@ class SizeTree(Tree[FSNode]):
         if node.is_hardlink:
             if node.is_hardlink_duplicate and node.hardlink_owner_path:
                 owner = node.hardlink_owner_path.rsplit("/", 1)[-1]
-                text.append(f"  [hardlink → {owner}]", style=ink("accent_dim"))
+                text.append(translate("  [hardlink → {owner}]").format(owner=owner), style=ink("accent_dim"))
             else:
                 text.append(
-                    f"  [hardlink owner; {node.link_count} links]",
+                    translate("  [hardlink owner; {link_count} links]").format(link_count=node.link_count),
                     style=ink("accent_dim"),
                 )
 
@@ -568,7 +569,7 @@ class SizeTree(Tree[FSNode]):
             marker = "xdev" if node.filesystem_boundary else node.exclusion_reason
             text.append(f"  [{marker or 'excluded'}]", style=ink("warning_strong"))
         elif node.depth_limited:
-            text.append("  [max-depth]", style=ink("warning_strong"))
+            text.append(translate("  [max-depth]"), style=ink("warning_strong"))
 
         # Accessibility indicators (full denial vs partial). Rendered last,
         # but resolved here so the bar can reserve room for them: they sit

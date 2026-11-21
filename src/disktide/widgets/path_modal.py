@@ -21,6 +21,7 @@ mouse toggle rather than the modal.
 """
 
 from __future__ import annotations
+from disktide.i18n import translate
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -59,9 +60,9 @@ class PathModal(ModalScreen[None]):
     """
 
     BINDINGS = [
-        Binding("escape", "close", "Close", show=False, id="modal.path_close"),
-        Binding("enter", "close", "Close", show=False, id="modal.path_close_enter"),
-        Binding("q", "close", "Close", show=False, id="modal.path_close_q"),
+        Binding("escape", "close", translate("Close"), show=False, id="modal.path_close"),
+        Binding("enter", "close", translate("Close"), show=False, id="modal.path_close_enter"),
+        Binding("q", "close", translate("Close"), show=False, id="modal.path_close_q"),
     ]
 
     def __init__(self, path: str, **kwargs):
@@ -70,12 +71,12 @@ class PathModal(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         hint = (
-            "Mouse reporting is off while this is open: drag to select, then "
+            translate("Mouse reporting is off while this is open: drag to select, then "
             "copy with your terminal's shortcut (Ctrl+Shift+C, ⌘C). "
-            "Esc closes."
+            "Esc closes.")
         )
         with Vertical(id="path-dialog"):
-            yield Static(Text("Path (select and copy by hand)", style="bold"))
+            yield Static(Text(translate("Path (select and copy by hand)"), style="bold"))
             # Plain text, not a `Text`: `Static.ALLOW_SELECT` is already
             # True, so Textual's own selection and its ctrl+c work in here
             # as well -- and that copy now takes the routes `y` takes,

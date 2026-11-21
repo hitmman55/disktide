@@ -12,6 +12,7 @@ from rich.table import Table
 from rich.text import Text
 import humanize
 
+from disktide.i18n import format_size, policy_text, translate
 from disktide.metrics import (
     DEFAULT_METRIC,
     METRIC_NAMES,
@@ -58,45 +59,60 @@ class InfoPanel(Widget):
         """Update the displayed node information."""
         self._node = node
         if node is None:
-            self._display.update("No item selected")
+            self._display.update(translate("No item selected"))
             return
 
         table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column("Property", style="bold")
+        table.add_column(translate("Property"), style="bold")
         # `fold`, not the default ellipsis: the one row here that routinely
         # outruns the panel is `Path`, and cropping a path at the right
         # drops the directory it names in favour of the mount prefix every
         # other path on the machine shares. Wrapping keeps all of it.
-        table.add_column("Value", overflow="fold")
+        table.add_column(translate("Value"), overflow="fold")
 
-        table.add_row("Name", node.name)
-        table.add_row("Path", node.path)
+        table.add_row(translate("Name"), node.name)
+        table.add_row(translate("Path"), node.path)
         if node.is_symlink:
-            table.add_row("Type", "Symlink")
+            table.add_row(translate("Type"), translate("Symlink"))
             if not node.link_classified:
                 # readlink + a following stat are two server round-trips on
                 # a network filesystem with a cold attribute cache. The
                 # panel renders without them and `_classify_node` fills
                 # these rows in off the UI thread.
-                table.add_row("Target", node.link_target or "…")
-                table.add_row("Target type", Text("Resolving…", style="dim"))
+                table.add_row(translate("Target"), node.link_target or "…")
+                table.add_row(
+                    translate("Target type"), Text(translate("Resolving…"), style="dim")
+                )
             else:
                 if node.link_target:
-                    table.add_row("Target", node.link_target)
+                    table.add_row(translate("Target"), node.link_target)
                 if node.link_broken:
                     table.add_row(
-                        "Target type", Text("Broken or unreachable", style=ink("error_strong"))
+                        translate("Target type"),
+                        Text(
+                            translate("Broken or unreachable"),
+                            style=ink("error_strong"),
+                        ),
                     )
                 elif node.link_is_dir:
-                    table.add_row("Target type", "Directory  (press i to enter)")
+                    table.add_row(
+                        translate("Target type"),
+                        translate("Directory  (press i to enter)"),
+                    )
                 else:
-                    table.add_row("Target type", "File")
+                    table.add_row(translate("Target type"), translate("File"))
         else:
-            table.add_row("Type", "Directory" if node.is_dir else "File")
+            table.add_row(
+                translate("Type"),
+                translate("Directory") if node.is_dir else translate("File"),
+            )
             if node.is_loop:
                 table.add_row(
-                    "Note",
-                    Text("Filesystem loop (not scanned)", style=ink("warning_strong")),
+                    translate("Note"),
+                    Text(
+                        translate("Filesystem loop (not scanned)"),
+                        style=ink("warning_strong"),
+                    ),
                 )
 
         hidden = node.is_dir and (
@@ -109,115 +125,156 @@ class InfoPanel(Widget):
         ):
             value = metric_text(node, metric)
             if hidden and value != "Unavailable":
-                table.add_row(label, Text(f"≥ {value}  (partial)", style=ink("warning")))
+                table.add_row(
+                    label,
+                    Text(
+                        translate("≥ {value}  (partial)").format(value=value),
+                        style=ink("warning"),
+                    ),
+                )
             else:
                 table.add_row(label, value)
 
         if node.is_hardlink:
-            table.add_row("Hard links", f"{node.link_count:,}")
+            table.add_row(translate("Hard links"), f"{node.link_count:,}")
             if node.hardlink_owner_path:
                 owner_text = node.hardlink_owner_path
                 if node.is_hardlink_duplicate:
                     owner_text += "  (unique bytes assigned there)"
                 else:
                     owner_text += "  (this path owns unique bytes)"
-                table.add_row("Unique owner", owner_text)
+                table.add_row(translate("Unique owner"), owner_text)
 
         if node.is_dir:
             table.add_row(
-                "Own Logical",
-                humanize.naturalsize(node.own_size, binary=True),
+                translate("Own Logical"),
+                format_size(node.own_size, binary=True),
             )
             table.add_row(
-                "Own Allocated",
-                "Unavailable" if node.own_allocated_size is None else
-                humanize.naturalsize(node.own_allocated_size, binary=True),
+                translate("Own Allocated"),
+                translate("Unavailable")
+                if node.own_allocated_size is None
+                else format_size(node.own_allocated_size, binary=True),
             )
             table.add_row(
-                "Own Unique",
-                "Unavailable" if node.own_unique_allocated_size is None else
-                humanize.naturalsize(node.own_unique_allocated_size, binary=True),
+                translate("Own Unique"),
+                translate("Unavailable")
+                if node.own_unique_allocated_size is None
+                else format_size(node.own_unique_allocated_size, binary=True),
             )
-            table.add_row("Files", f"{node.file_count:,}")
-            table.add_row("Subdirs", f"{node.dir_count:,}")
+            table.add_row(translate("Files"), f"{node.file_count:,}")
+            table.add_row(translate("Subdirs"), f"{node.dir_count:,}")
 
             if node.excluded:
                 table.add_row(
-                    "Scan scope",
+                    translate("Scan scope"),
                     Text(node.exclusion_reason or "Excluded", style=ink("warning_strong")),
                 )
             elif node.depth_limited:
                 table.add_row(
-                    "Scan scope", Text("Stopped at max depth", style=ink("warning_strong"))
+                    translate("Scan scope"),
+                    Text(
+                        translate("Stopped at max depth"), style=ink("warning_strong")
+                    ),
                 )
             elif node.excluded_subtree_count or node.depth_limited_subtree_count:
                 table.add_row(
-                    "Scan scope",
+                    translate("Scan scope"),
                     Text(
-                        f"{node.excluded_subtree_count} excluded; "
-                        f"{node.depth_limited_subtree_count} depth-limited",
+                        translate(
+                            "{excluded_subtree_count} excluded; {depth_limited_subtree_count} "
+                            "depth-limited"
+                        ).format(
+                            excluded_subtree_count=node.excluded_subtree_count,
+                            depth_limited_subtree_count=node.depth_limited_subtree_count,
+                        ),
                         style=ink("warning"),
                     ),
                 )
             if node.scan_policy is not None:
-                table.add_row("Policy", node.scan_policy.summary())
+                table.add_row(translate("Policy"), policy_text(node.scan_policy))
 
             # Access row — full denial / partial / hidden descendants only / ok
             if node.vanished:
                 # Not an access state at all, but this is the row a reader
                 # looks at to find out why a directory is empty.
                 table.add_row(
-                    "Access", Text("Removed during scan", style=ink("muted"))
+                    translate("Access"),
+                    Text(translate("Removed during scan"), style=ink("muted")),
                 )
             elif node.error is not None:
                 # "Unreadable" rather than "Denied": node.error captures any
                 # OSError from scandir, not only PermissionError.
-                table.add_row("Access", Text(f"{denied_glyph()} Unreadable", style=ink("error_strong")))
+                table.add_row(
+                    translate("Access"),
+                    Text(
+                        translate("{denied_glyph} Unreadable").format(
+                            denied_glyph=denied_glyph(),
+                        ),
+                        style=ink("error_strong"),
+                    ),
+                )
             elif node.inaccessible_count > 0:
                 # The tree row for this directory reads "N hidden" with the
                 # subtree aggregate; spell the split out here so the two
                 # numbers a reader sees in the two panes agree.
                 table.add_row(
-                    "Access",
+                    translate("Access"),
                     Text(
-                        f"{partial_glyph()} Partial — {node.inaccessible_count} "
-                        "unreadable in this directory · "
-                        f"{max(node.inaccessible_subtree_count, node.inaccessible_count)}"
-                        " hidden at or below",
+                        translate(
+                            "{partial_glyph} Partial — {inaccessible_count} unreadable in this "
+                            "directory · {max} hidden at or below"
+                        ).format(
+                            partial_glyph=partial_glyph(),
+                            inaccessible_count=node.inaccessible_count,
+                            max=max(
+                                node.inaccessible_subtree_count, node.inaccessible_count
+                            ),
+                        ),
                         style=ink("warning_strong"),
                     ),
                 )
             elif node.inaccessible_subtree_count > 0:
                 table.add_row(
-                    "Access",
+                    translate("Access"),
                     Text(
-                        f"{partial_glyph()} Partial — none unreadable in this "
-                        f"directory · {node.inaccessible_subtree_count} hidden "
-                        "at or below",
+                        translate(
+                            "{partial_glyph} Partial — none unreadable in this directory · "
+                            "{inaccessible_subtree_count} hidden at or below"
+                        ).format(
+                            partial_glyph=partial_glyph(),
+                            inaccessible_subtree_count=node.inaccessible_subtree_count,
+                        ),
                         style=ink("warning_dim"),
                     ),
                 )
             else:
-                table.add_row("Access", Text("✓ Full", style=ink("bar")))
+                table.add_row(
+                    translate("Access"), Text(translate("✓ Full"), style=ink("bar"))
+                )
 
             if node.vanished_subtree_count > 0:
                 entries = node.vanished_subtree_count
                 table.add_row(
-                    "Changed during scan",
+                    translate("Changed during scan"),
                     Text(
-                        f"{entries} {'entry' if entries == 1 else 'entries'} "
-                        "vanished",
+                        translate("{entries} {value} vanished").format(
+                            entries=entries,
+                            value="entry" if entries == 1 else "entries",
+                        ),
                         style=ink("muted"),
                     ),
                 )
 
         if node.mtime > 0:
             dt = datetime.fromtimestamp(node.mtime)
-            table.add_row("Modified", humanize.naturaltime(dt))
+            table.add_row(translate("Modified"), humanize.naturaltime(dt))
             table.add_row("", dt.strftime("%Y-%m-%d %H:%M:%S"))
 
         if node.error:
-            table.add_row("Error", Text(node.error, style=ink("error_strong")))
+            table.add_row(
+                translate("Error"), Text(node.error, style=ink("error_strong"))
+            )
 
         # Top children by the active metric (size by default, or file count)
         if node.is_dir and node.children:

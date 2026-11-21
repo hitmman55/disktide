@@ -2,6 +2,8 @@
 
 <h1>DiskTide</h1>
 
+<p><a href="README.ru.md">Русская версия</a></p>
+
 <h3><code>&nbsp;ebb,&nbsp;flow,&nbsp;reclaim&nbsp;</code></h3>
 
 <p>

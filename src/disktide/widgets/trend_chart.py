@@ -9,6 +9,7 @@ from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
+from disktide.i18n import translate
 from disktide.domain.metrics import MetricId
 from disktide.domain.visualization import (
     TrendModel,
@@ -104,7 +105,7 @@ class TrendChart(Widget):
             self._legend = Static("", classes="trend-legend", markup=True)
             yield self._legend
         else:
-            yield Static("Install textual-plotext for trend charts")
+            yield Static(translate("Install textual-plotext for trend charts"))
 
     def on_resize(self) -> None:
         self._fit_legend()
@@ -252,7 +253,7 @@ class TrendChart(Widget):
         plt.clear_figure()
         model = self._model
         if model is None or not model.series:
-            plt.title("Size Trends · no history")
+            plt.title(translate("Size Trends · no history"))
             self._update_legend(())
             self._plot.refresh()
             return
@@ -262,12 +263,14 @@ class TrendChart(Widget):
         date_form = _pick_date_form(all_dates)
         plt.date_form(date_form)
         plt.title(
-            f"Space-Time Trend · {int(self.zoom_fraction * 100)}% window"
-            + (f" · pan {self._pan}" if self._pan else "")
+            translate("Space-Time Trend · {percent}% window").format(
+                percent=int(self.zoom_fraction * 100)
+            )
+            + (translate(" · pan {offset}").format(offset=self._pan) if self._pan else "")
         )
-        plt.xlabel("Time")
+        plt.xlabel(translate("Time"))
         # MiB, not MB: `_plot_value` divides by 1024**2.
-        plt.ylabel("Files" if model.metric is MetricId.FILES else "Size (MiB)")
+        plt.ylabel(translate("Files" if model.metric is MetricId.FILES else "Size (MiB)"))
 
         segments = self.prepared_segments()
         for index, series in enumerate(visible):

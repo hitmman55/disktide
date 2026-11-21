@@ -11,6 +11,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static, Switch
 
+from disktide.i18n import diagnostic, translate
 from disktide.config import AppConfig, format_duration, parse_duration
 from disktide.domain.metrics import MetricId
 from disktide.domain.monitor import MonitorDefinition, RetentionPolicy
@@ -51,10 +52,26 @@ class MonitorEditor(ModalScreen[MonitorEditorResult | None]):
     """Short basic form with policy controls in an advanced section."""
 
     BINDINGS = [
-        Binding("escape", "cancel", "Cancel", show=False, id="editor.cancel"),
-        Binding("ctrl+s", "save", "Save", show=True, id="editor.save"),
-        Binding("down", "focus_next", "Next", show=False, priority=True, id="editor.field_next"),
-        Binding("up", "focus_previous", "Previous", show=False, priority=True, id="editor.field_previous"),
+        Binding(
+            "escape", "cancel", translate("Cancel"), show=False, id="editor.cancel"
+        ),
+        Binding("ctrl+s", "save", translate("Save"), show=True, id="editor.save"),
+        Binding(
+            "down",
+            "focus_next",
+            translate("Next"),
+            show=False,
+            priority=True,
+            id="editor.field_next",
+        ),
+        Binding(
+            "up",
+            "focus_previous",
+            translate("Previous"),
+            show=False,
+            priority=True,
+            id="editor.field_previous",
+        ),
     ]
 
     DEFAULT_CSS = """
@@ -154,27 +171,29 @@ class MonitorEditor(ModalScreen[MonitorEditorResult | None]):
         )
         with Vertical(id="monitor-editor-dialog"):
             yield Static(
-                "Edit monitor" if current else "Set up monitoring",
+                translate("Edit monitor")
+                if current
+                else translate("Set up monitoring"),
                 classes="editor-title",
             )
             with VerticalScroll(id="monitor-editor-scroll"):
                 with Horizontal(classes="editor-row"):
-                    yield Label("Path", classes="editor-label")
+                    yield Label(translate("Path"), classes="editor-label")
                     yield Input(
                         value=current.root_path if current else self._default_path,
                         id="monitor-path",
                         classes="editor-input",
                     )
                 with Horizontal(classes="editor-row"):
-                    yield Label("Label", classes="editor-label")
+                    yield Label(translate("Label"), classes="editor-label")
                     yield Input(
                         value=current.label if current else "",
-                        placeholder="optional",
+                        placeholder=translate("optional"),
                         id="monitor-label",
                         classes="editor-input",
                     )
                 with Horizontal(classes="editor-row"):
-                    yield Label("Interval", classes="editor-label")
+                    yield Label(translate("Interval"), classes="editor-label")
                     yield Input(
                         value=format_duration(
                             current.interval_seconds
@@ -185,13 +204,13 @@ class MonitorEditor(ModalScreen[MonitorEditorResult | None]):
                         classes="editor-input",
                     )
                 with Horizontal(classes="editor-row"):
-                    yield Label("Metric", classes="editor-label")
+                    yield Label(translate("Metric"), classes="editor-label")
                     yield Select(
                         [
-                            ("Logical bytes", "logical"),
-                            ("Allocated bytes", "allocated"),
-                            ("Unique allocated", "unique"),
-                            ("File count", "files"),
+                            (translate("Logical bytes"), "logical"),
+                            (translate("Allocated bytes"), "allocated"),
+                            (translate("Unique allocated"), "unique"),
+                            (translate("File count"), "files"),
                         ],
                         value=(current.metric.value if current else "logical"),
                         allow_blank=False,
@@ -199,12 +218,12 @@ class MonitorEditor(ModalScreen[MonitorEditorResult | None]):
                         classes="editor-select",
                     )
                 with Horizontal(classes="editor-row"):
-                    yield Label("Retention", classes="editor-label")
+                    yield Label(translate("Retention"), classes="editor-label")
                     yield Select(
                         [
-                            ("Balanced", "balanced"),
-                            ("Compact", "compact"),
-                            ("Archive", "archive"),
+                            (translate("Balanced"), "balanced"),
+                            (translate("Compact"), "compact"),
+                            (translate("Archive"), "archive"),
                         ],
                         value=(
                             _retention_name(current.retention)
@@ -217,67 +236,75 @@ class MonitorEditor(ModalScreen[MonitorEditorResult | None]):
                     )
                 if current is None:
                     with Horizontal(classes="editor-row"):
-                        yield Label("Capture first snapshot", classes="editor-label")
+                        yield Label(
+                            translate("Capture first snapshot"), classes="editor-label"
+                        )
                         yield Switch(value=False, id="monitor-capture")
 
-                yield Static("Advanced scan policy", classes="editor-section")
+                yield Static(
+                    translate("Advanced scan policy"), classes="editor-section"
+                )
                 with Horizontal(classes="editor-row"):
-                    yield Label("Workers", classes="editor-label")
+                    yield Label(translate("Workers"), classes="editor-label")
                     yield Input(
                         value=(
                             str(current.workers)
                             if current and current.workers is not None
                             else ""
                         ),
-                        placeholder="auto",
+                        placeholder=translate("auto"),
                         id="monitor-workers",
                         classes="editor-input",
                     )
                 with Horizontal(classes="editor-row"):
-                    yield Label("Max depth", classes="editor-label")
+                    yield Label(translate("Max depth"), classes="editor-label")
                     yield Input(
                         value=(
                             str(policy.max_depth)
                             if policy.max_depth is not None
                             else ""
                         ),
-                        placeholder="unlimited",
+                        placeholder=translate("unlimited"),
                         id="monitor-max-depth",
                         classes="editor-input",
                     )
                 with Horizontal(classes="editor-row"):
-                    yield Label("One filesystem", classes="editor-label")
+                    yield Label(translate("One filesystem"), classes="editor-label")
                     yield Switch(
                         value=policy.one_file_system,
                         id="monitor-one-filesystem",
                     )
                 with Horizontal(classes="editor-row"):
-                    yield Label("Exclude pseudo FS", classes="editor-label")
+                    yield Label(translate("Exclude pseudo FS"), classes="editor-label")
                     yield Switch(
                         value=policy.exclude_pseudo_filesystems,
                         id="monitor-exclude-pseudo",
                     )
                 with Horizontal(classes="editor-row"):
-                    yield Label("Exclude snapshot dirs", classes="editor-label")
+                    yield Label(
+                        translate("Exclude snapshot dirs"), classes="editor-label"
+                    )
                     yield Switch(
                         value=policy.exclude_snapshot_dirs,
                         id="monitor-exclude-snapshots",
                     )
                 yield Static(
                     (
-                        "Changing path, metric, or scan policy creates a new "
+                        translate("Changing path, metric, or scan policy creates a new "
                         "revision. Existing history remains, but trusted compare "
-                        "does not cross revision boundaries."
+                        "does not cross revision boundaries.")
                         if current
-                        else "Monitoring runs only while this TUI session or a "
-                        "foreground CLI host is active; no daemon is installed."
+                        else translate(
+                            "Monitoring runs only while this TUI session or a "
+                            "foreground CLI host is active; no daemon is installed."
+                        )
                     ),
                     id="monitor-editor-note",
                 )
                 yield Static("", id="monitor-editor-error")
             with Horizontal(classes="editor-buttons"):
-                yield Button("Save", variant="primary", id="monitor-save")
-                yield Button("Cancel", id="monitor-cancel")
+                yield Button(translate("Save"), variant="primary", id="monitor-save")
+                yield Button(translate("Cancel"), id="monitor-cancel")
 
     def on_mount(self) -> None:
         self.query_one("#monitor-path", Input).focus()
@@ -298,24 +325,26 @@ class MonitorEditor(ModalScreen[MonitorEditorResult | None]):
         try:
             root_path = self.query_one("#monitor-path", Input).value.strip()
             if not root_path:
-                raise ValueError("Path is required")
+                raise ValueError(translate("Path is required"))
             if not os.path.isdir(os.path.expanduser(root_path)):
                 raise ValueError(
-                    f"Path is not an existing directory: {root_path}"
+                    translate("Path is not an existing directory: {path}").format(
+                        path=root_path
+                    )
                 )
             interval = parse_duration(
                 self.query_one("#monitor-interval", Input).value
             )
             if interval <= 0:
-                raise ValueError("Interval must be greater than zero")
+                raise ValueError(translate("Interval must be greater than zero"))
             workers_text = self.query_one("#monitor-workers", Input).value.strip()
             workers = int(workers_text) if workers_text else None
             if workers is not None and workers <= 0:
-                raise ValueError("Workers must be greater than zero")
+                raise ValueError(translate("Workers must be greater than zero"))
             depth_text = self.query_one("#monitor-max-depth", Input).value.strip()
             max_depth = int(depth_text) if depth_text else None
             if max_depth is not None and max_depth < 0:
-                raise ValueError("Max depth cannot be negative")
+                raise ValueError(translate("Max depth cannot be negative"))
             metric = MetricId.parse(
                 str(self.query_one("#monitor-metric", Select).value)
             )
@@ -368,7 +397,7 @@ class MonitorEditor(ModalScreen[MonitorEditorResult | None]):
                 )
                 capture_now = False
         except (TypeError, ValueError) as exc:
-            error.update(str(exc))
+            error.update(diagnostic(str(exc)))
             return
         self.dismiss(MonitorEditorResult(definition, capture_now))
 

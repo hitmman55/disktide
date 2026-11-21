@@ -9,6 +9,7 @@ from textual.binding import Binding
 from textual.message import Message
 from textual.strip import Strip
 
+from disktide.i18n import translate
 from disktide.widgets import OpaqueStripMixin
 from textual.widget import Widget
 
@@ -23,9 +24,19 @@ class GrowthHeatmap(OpaqueStripMixin, Widget, can_focus=True):
     """Render top-changing paths across bounded snapshot intervals."""
 
     BINDINGS = [
-        Binding("up", "cursor_up", "Previous path", show=False, id="heatmap.up"),
-        Binding("down", "cursor_down", "Next path", show=False, id="heatmap.down"),
-        Binding("enter", "select_path", "Open path", show=False, id="heatmap.select"),
+        Binding(
+            "up", "cursor_up", translate("Previous path"), show=False, id="heatmap.up"
+        ),
+        Binding(
+            "down", "cursor_down", translate("Next path"), show=False, id="heatmap.down"
+        ),
+        Binding(
+            "enter",
+            "select_path",
+            translate("Open path"),
+            show=False,
+            id="heatmap.select",
+        ),
     ]
 
     DEFAULT_CSS = """
@@ -107,7 +118,7 @@ class GrowthHeatmap(OpaqueStripMixin, Widget, can_focus=True):
         if width <= 0 or height <= 0:
             return Strip.blank(max(0, width))
         if model is None or not model.rows:
-            message = "Growth heatmap needs at least two changing snapshots"
+            message = translate("Growth heatmap needs at least two changing snapshots")
             if y == height // 2:
                 return Strip([Segment(message[:width].center(width), Style(dim=True))])
             return Strip.blank(width)
@@ -120,7 +131,12 @@ class GrowthHeatmap(OpaqueStripMixin, Widget, can_focus=True):
     ) -> Strip:
         if y == 0:
             return Strip(
-                [Segment("Persistent growth summary".ljust(width), Style(bold=True))]
+                [
+                    Segment(
+                        translate("Persistent growth summary").ljust(width),
+                        Style(bold=True),
+                    )
+                ]
             )
         index = y - 1
         if 0 <= index < min(len(model.rows), max(0, self.size.height - 2)):
@@ -128,8 +144,10 @@ class GrowthHeatmap(OpaqueStripMixin, Widget, can_focus=True):
             token = visual_token(VisualState.GROWTH)
             marker = ">" if index == self._cursor else " "
             text = (
-                f"{marker}{token.glyph} {self._row_label(row.path)}  "
-                f"{row.consistency:.0%} · streak {row.longest_streak}"
+                translate("{marker}{glyph} {path}  {consistency:.0%} · streak {streak}").format(
+                    marker=marker, glyph=token.glyph, path=self._row_label(row.path),
+                    consistency=row.consistency, streak=row.longest_streak,
+                )
             )
             return Strip(
                 [Segment(set_cell_size(text, width), Style(color=token.color))]

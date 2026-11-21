@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import humanize
 from textual import events, on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -23,6 +22,14 @@ from textual.widgets import (
     TabPane,
 )
 
+from disktide.i18n import (
+    diagnostic,
+    format_size,
+    policy_text,
+    status_label,
+    translate,
+    worker_policy_text,
+)
 from disktide.config import AppConfig, format_duration, save_config
 from disktide.keys import ALERT, DIFF, TREND
 from disktide.domain.alerts import AlertRule
@@ -66,51 +73,173 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
     """Unified TUI management surface over :class:`MonitorService`."""
 
     BINDINGS = [
-        Binding("n", "new_monitor", "New", show=True, id="monitor.new"),
-        Binding("e", "edit_monitor", "Edit", show=True, id="monitor.edit"),
-        Binding("p", "pause_resume", "Pause", show=True, id="monitor.pause"),
-        Binding("R", "run_now", "Run", show=True, key_display="R", id="monitor.run_now"),
+        Binding("n", "new_monitor", translate("New"), show=True, id="monitor.new"),
+        Binding("e", "edit_monitor", translate("Edit"), show=True, id="monitor.edit"),
+        Binding("p", "pause_resume", translate("Pause"), show=True, id="monitor.pause"),
+        Binding(
+            "R",
+            "run_now",
+            translate("Run"),
+            show=True,
+            key_display="R",
+            id="monitor.run_now",
+        ),
         # Baseline and target are one control — which pair of snapshots the
         # diff map is built from — so they share a footer group.
-        Binding("b", "set_diff_baseline", "Set baseline", show=True, group=DIFF, id="monitor.baseline"),
-        Binding("v", "set_diff_target", "Set target", show=True, group=DIFF, id="monitor.target"),
-        Binding("l", "use_latest_pair", "Latest/previous", show=False, id="monitor.latest_pair"),
+        Binding(
+            "b",
+            "set_diff_baseline",
+            translate("Set baseline"),
+            show=True,
+            group=DIFF,
+            id="monitor.baseline",
+        ),
+        Binding(
+            "v",
+            "set_diff_target",
+            translate("Set target"),
+            show=True,
+            group=DIFF,
+            id="monitor.target",
+        ),
+        Binding(
+            "l",
+            "use_latest_pair",
+            translate("Latest/previous"),
+            show=False,
+            id="monitor.latest_pair",
+        ),
         # `s` started a background sampling host while Explorer's `s` only
         # cycled a sort. Shift, per the rule: a key that is consequential in
         # any mode is consequential in every mode. Shifted letters are
         # declared as the capital, which is the key event a terminal sends.
         Binding(
-            "S", "toggle_session", "Start/Stop sampling",
+            "S", "toggle_session", translate("Start/Stop sampling"),
             show=False, key_display="S", id="monitor.sampling",
         ),
-        Binding("g", "reconcile", "Reconcile", show=False, id="monitor.reconcile"),
-        Binding("r", "refresh", "Refresh", show=False, id="monitor.refresh"),
+        Binding(
+            "g", "reconcile", translate("Reconcile"), show=False, id="monitor.reconcile"
+        ),
+        Binding("r", "refresh", translate("Refresh"), show=False, id="monitor.refresh"),
         # Archiving a monitor is rare and destructive. It used to be `d`, the
         # same finger as Explorer's view toggle and Cleanup's delete plan; it
         # is now reachable by name from the command palette only, which is
         # why it carries no key here.
-        Binding("i", "pin_snapshot", "Pin/Unpin", show=False, id="monitor.pin"),
-        Binding("a", "add_alert", "Add alert", show=False, group=ALERT, id="monitor.alert_add"),
-        Binding("A", "edit_alert", "Edit alert", show=False, group=ALERT, id="monitor.alert_edit"),
-        Binding("x", "toggle_alert", "Toggle alert", show=False, group=ALERT, id="monitor.alert_toggle"),
         Binding(
-            "backspace", "remove_alert", "Remove alert",
+            "backspace", "remove_alert", translate("Remove alert"),
             show=False, group=ALERT, id="monitor.alert_remove",
         ),
-        Binding("t", "run_retention", "Retention", show=False, id="monitor.retention"),
-        Binding("enter", "open_detail", "Details", show=False, id="monitor.detail"),
-        Binding("escape", "back_to_list", "Back", show=False, id="monitor.back"),
+        Binding(
+            "a",
+            "add_alert",
+            translate("Add alert"),
+            show=False,
+            group=ALERT,
+            id="monitor.alert_add",
+        ),
+        Binding(
+            "A",
+            "edit_alert",
+            translate("Edit alert"),
+            show=False,
+            group=ALERT,
+            id="monitor.alert_edit",
+        ),
+        Binding(
+            "x",
+            "toggle_alert",
+            translate("Toggle alert"),
+            show=False,
+            group=ALERT,
+            id="monitor.alert_toggle",
+        ),
+        Binding(
+            "backspace",
+            "remove_alert",
+            translate("Remove alert"),
+            show=False,
+            group=ALERT,
+            id="monitor.alert_remove",
+        ),
+        Binding(
+            "t",
+            "run_retention",
+            translate("Retention"),
+            show=False,
+            id="monitor.retention",
+        ),
+        Binding(
+            "enter",
+            "open_detail",
+            translate("Details"),
+            show=False,
+            id="monitor.detail",
+        ),
+        Binding(
+            "escape", "back_to_list", translate("Back"), show=False, id="monitor.back"
+        ),
         # F1-F4 are eaten by tmux, macOS and several terminal emulators, so
         # `tab` walks the same four tabs. The tab labels already carry their
         # own names, which is what makes cycling legible without a footer slot.
-        Binding("f1", "switch_history_viz('trend')", "Trend", show=False, id="monitor.viz_trend"),
-        Binding("f2", "switch_history_viz('treemap')", "Diff map", show=False, id="monitor.viz_treemap"),
-        Binding("f3", "switch_history_viz('sunburst')", "Growth rings", show=False, id="monitor.viz_sunburst"),
-        Binding("f4", "switch_history_viz('heatmap')", "Heatmap", show=False, id="monitor.viz_heatmap"),
-        Binding("tab", "next_history_viz", "Next chart", show=False, id="monitor.viz_next"),
-        Binding("z", "cycle_trend_zoom", "Trend zoom", show=False, group=TREND, id="monitor.trend_zoom"),
-        Binding("shift+left", "pan_trend(1)", "Trend older", show=False, group=TREND, id="monitor.trend_older"),
-        Binding("shift+right", "pan_trend(-1)", "Trend newer", show=False, group=TREND, id="monitor.trend_newer"),
+        Binding(
+            "f1",
+            "switch_history_viz('trend')",
+            translate("Trend"),
+            show=False,
+            id="monitor.viz_trend",
+        ),
+        Binding(
+            "f2",
+            "switch_history_viz('treemap')",
+            translate("Diff map"),
+            show=False,
+            id="monitor.viz_treemap",
+        ),
+        Binding(
+            "f3",
+            "switch_history_viz('sunburst')",
+            translate("Growth rings"),
+            show=False,
+            id="monitor.viz_sunburst",
+        ),
+        Binding(
+            "f4",
+            "switch_history_viz('heatmap')",
+            translate("Heatmap"),
+            show=False,
+            id="monitor.viz_heatmap",
+        ),
+        Binding(
+            "tab",
+            "next_history_viz",
+            translate("Next chart"),
+            show=False,
+            id="monitor.viz_next",
+        ),
+        Binding(
+            "z",
+            "cycle_trend_zoom",
+            translate("Trend zoom"),
+            show=False,
+            group=TREND,
+            id="monitor.trend_zoom",
+        ),
+        Binding(
+            "shift+left",
+            "pan_trend(1)",
+            translate("Trend older"),
+            show=False,
+            group=TREND,
+            id="monitor.trend_older",
+        ),
+        Binding(
+            "shift+right",
+            "pan_trend(-1)",
+            translate("Trend newer"),
+            show=False,
+            group=TREND,
+            id="monitor.trend_newer",
+        ),
     ]
 
     DEFAULT_CSS = """
@@ -303,41 +432,47 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
 
     def compose(self) -> ComposeResult:
         yield Header()
-        yield Static("Monitor Center", id="monitor-session-banner")
+        yield Static(translate("Monitor Center"), id="monitor-session-banner")
         with Horizontal(id="monitor-center"):
             with Vertical(id="monitor-list-panel"):
-                yield Static("Monitors", id="monitor-list-title")
+                yield Static(translate("Monitors"), id="monitor-list-title")
                 monitor_table = DataTable(id="monitor-list")
                 monitor_table.cursor_type = "row"
-                monitor_table.add_columns("Monitor", "State", "Next")
+                monitor_table.add_columns(
+                    translate("Monitor"), translate("State"), translate("Next")
+                )
                 yield monitor_table
                 yield Static(
-                    "Enter opens details · ? keys", id="monitor-list-hint"
+                    translate("Enter opens details · ? keys"), id="monitor-list-hint"
                 )
             with Vertical(id="monitor-detail-panel"):
-                yield Static("Select a monitor", id="monitor-detail-title")
+                yield Static(translate("Select a monitor"), id="monitor-detail-title")
                 with Horizontal(id="monitor-sampling-controls"):
                     yield Button(
-                        "Loading sampling state…",
+                        translate("Loading sampling state…"),
                         id="monitor-session-toggle",
                         disabled=True,
                         tooltip=(
-                            "Start all enabled monitors, or stop the host and "
-                            "cancel its active scan."
+                            translate(
+                                "Start all enabled monitors, or stop the host and "
+                                "cancel its active scan."
+                            )
                         ),
                     )
                     yield Button(
-                        "Auto-start: On"
+                        translate("Auto-start: On")
                         if self._config.monitor.auto_start_in_tui
-                        else "Auto-start: Off",
+                        else translate("Auto-start: Off"),
                         id="monitor-auto-start-toggle",
                         tooltip=(
-                            "Automatically start all enabled monitors on future "
-                            "TUI launches."
+                            translate(
+                                "Automatically start all enabled monitors on future "
+                                "TUI launches."
+                            )
                         ),
                     )
                     yield Static(
-                        "All enabled monitors; TUI must stay open.",
+                        translate("All enabled monitors; TUI must stay open."),
                         id="monitor-session-help",
                     )
                 with Vertical(id="monitor-loading-wrap"):
@@ -346,45 +481,70 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
                     initial="monitor-history-tab",
                     id="monitor-tabs",
                 ):
-                    with TabPane("History", id="monitor-history-tab"):
+                    with TabPane(translate("History"), id="monitor-history-tab"):
                         yield Static("", id="monitor-history-summary")
                         with TabbedContent(id="monitor-history-viz-tabs"):
-                            with TabPane("Trend \\[F1]", id="monitor-trend-tab"):
+                            with TabPane(
+                                translate("Trend \\[F1]"), id="monitor-trend-tab"
+                            ):
                                 yield TrendChart(id="monitor-history-chart")
-                            with TabPane("Diff Map \\[F2]", id="monitor-diff-tab"):
+                            with TabPane(
+                                translate("Diff Map \\[F2]"), id="monitor-diff-tab"
+                            ):
                                 yield TreemapView(id="monitor-diff-treemap")
-                            with TabPane("Growth Rings \\[F3]", id="monitor-rings-tab"):
+                            with TabPane(
+                                translate("Growth Rings \\[F3]"), id="monitor-rings-tab"
+                            ):
                                 yield SunburstView(id="monitor-growth-sunburst")
-                            with TabPane("Heatmap \\[F4]", id="monitor-heatmap-tab"):
+                            with TabPane(
+                                translate("Heatmap \\[F4]"), id="monitor-heatmap-tab"
+                            ):
                                 yield GrowthHeatmap(id="monitor-growth-heatmap")
                         history_table = DataTable(id="monitor-history-table")
                         history_table.cursor_type = "row"
                         history_table.add_columns(
-                            "Time", "Path", "Value", "State", "Revision", "Flags"
+                            translate("Time"),
+                            translate("Path"),
+                            translate("Value"),
+                            translate("State"),
+                            translate("Revision"),
+                            translate("Flags"),
                         )
                         yield history_table
-                    with TabPane("Details", id="monitor-overview-tab"):
+                    with TabPane(translate("Details"), id="monitor-overview-tab"):
                         yield Static("", id="monitor-overview")
-                    with TabPane("Alerts", id="monitor-alerts-tab"):
+                    with TabPane(translate("Alerts"), id="monitor-alerts-tab"):
                         yield Static("", id="monitor-alert-summary")
                         rules = DataTable(id="monitor-alert-rules")
                         rules.cursor_type = "row"
                         rules.add_columns(
-                            "Rule", "Target", "Threshold", "Severity", "State"
+                            translate("Rule"),
+                            translate("Target"),
+                            translate("Threshold"),
+                            translate("Severity"),
+                            translate("State"),
                         )
                         yield rules
                         alert_events = DataTable(id="monitor-alert-events")
                         alert_events.cursor_type = "row"
                         alert_events.add_columns(
-                            "When", "Rule", "Result", "Confidence", "Snapshot"
+                            translate("When"),
+                            translate("Rule"),
+                            translate("Result"),
+                            translate("Confidence"),
+                            translate("Snapshot"),
                         )
                         yield alert_events
-                    with TabPane("Retention", id="monitor-retention-tab"):
+                    with TabPane(translate("Retention"), id="monitor-retention-tab"):
                         yield Static("", id="monitor-retention-summary")
                         retention = DataTable(id="monitor-retention-table")
                         retention.cursor_type = "row"
                         retention.add_columns(
-                            "Snapshot", "Time", "State", "Revision", "Protection"
+                            translate("Snapshot"),
+                            translate("Time"),
+                            translate("State"),
+                            translate("Revision"),
+                            translate("Protection"),
                         )
                         yield retention
         yield Footer()
@@ -469,7 +629,10 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         except Exception as exc:
             self.app.call_from_thread(
                 self._show_error,
-                f"Monitor Center could not load: {type(exc).__name__}: {exc}",
+                translate("Monitor Center could not load: {__name__}: {exc}").format(
+                    __name__=type(exc).__name__,
+                    exc=exc,
+                ),
             )
         finally:
             self.app.call_from_thread(self._show_loading, False)
@@ -562,15 +725,24 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         degraded = sum(
             item.status.reconciliation_required for item in dashboard.monitors
         )
-        budget = humanize.naturalsize(dashboard.database_bytes, binary=True)
+        budget = format_size(dashboard.database_bytes, binary=True)
         if dashboard.hard_budget_bytes:
-            budget += " / " + humanize.naturalsize(
+            budget += " / " + format_size(
                 dashboard.hard_budget_bytes, binary=True
             )
         self.query_one("#monitor-session-banner", Static).update(
-            f"Monitor Center · Session {session} · {enabled} enabled · "
-            f"events {event_assisted} · dirty {pending} · degraded {degraded} · "
-            f"DB {budget} · repository {dashboard.repository_state}"
+            translate(
+                "Monitor Center · Session {session} · {enabled} enabled · events {event_assisted} · "
+                "dirty {pending} · degraded {degraded} · DB {budget} · repository {repository_state}"
+            ).format(
+                session=session,
+                enabled=enabled,
+                event_assisted=event_assisted,
+                pending=pending,
+                degraded=degraded,
+                budget=budget,
+                repository_state=status_label(dashboard.repository_state),
+            )
         )
 
     def _render_sampling_controls(self) -> None:
@@ -586,30 +758,34 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         help_text = self.query_one("#monitor-session-help", Static)
 
         if self._session_stopping:
-            toggle.label = "Stopping & cancelling…"
+            toggle.label = translate("Stopping & cancelling…")
             toggle.variant = "warning"
             toggle.disabled = True
-            help_text.update("Stopping host; cancelling active scan.")
+            help_text.update(translate("Stopping host; cancelling active scan."))
         elif dashboard.session_running:
-            toggle.label = "Stop & cancel \\[S]"
+            toggle.label = translate("Stop & cancel \\[S]")
             toggle.variant = "error"
             toggle.disabled = False
             help_text.update(
-                f"Running · {enabled} enabled · active across screens."
+                translate(
+                    "Running · {enabled} enabled · active across screens."
+                ).format(
+                    enabled=enabled,
+                )
             )
         else:
-            toggle.label = "Start sampling \\[S]"
+            toggle.label = translate("Start sampling \\[S]")
             toggle.variant = "success"
             toggle.disabled = enabled == 0 or dashboard.repository_state != "writable"
             if enabled:
-                help_text.update("Stopped · scheduled collection is off.")
+                help_text.update(translate("Stopped · scheduled collection is off."))
             else:
-                help_text.update("No enabled monitors available.")
+                help_text.update(translate("No enabled monitors available."))
 
         auto_start.label = (
             "Auto-start: On"
             if self._config.monitor.auto_start_in_tui
-            else "Auto-start: Off"
+            else translate("Auto-start: Off")
         )
         auto_start.variant = (
             "primary" if self._config.monitor.auto_start_in_tui else "default"
@@ -631,8 +807,14 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             )
             table.add_row(
                 definition.label,
-                f"{definition.desired_state.value}/{status.activity.value}/"
-                f"{status.health.value}",
+                "/".join(
+                    status_label(value)
+                    for value in (
+                        definition.desired_state,
+                        status.activity,
+                        status.health,
+                    )
+                ),
                 next_due,
                 key=str(definition.id),
             )
@@ -640,21 +822,33 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
     def _render_empty(self) -> None:
         state = self._dashboard.repository_state if self._dashboard else "unknown"
         writable = state == "writable"
-        action = "Press n to set up monitoring." if writable else "Setup is disabled."
+        action = (
+            translate("Press n to set up monitoring.")
+            if writable
+            else translate("Setup is disabled.")
+        )
         self._clear_detail_tables()
-        self.query_one("#monitor-detail-title", Static).update("Monitor Center")
+        self.query_one("#monitor-detail-title", Static).update(
+            translate("Monitor Center")
+        )
         self.query_one("#monitor-overview", Static).update(
-            "[b]No monitor definition covers the current selection.[/b]\n\n"
-            f"Explorer root: {self._root_path or 'unknown'}\n"
-            f"Selected path: {self._selected_path or 'none'}\n\n"
-            f"{action}\n"
-            "A monitor only runs while this TUI session or a foreground CLI "
-            "host is active. Enabled does not mean a daemon is installed."
+            translate(
+                "[b]No monitor definition covers the current selection.[/b]\n\nExplorer root: {root_path}\n"
+                "Selected path: {selected_path}\n\n{action}\nA monitor only runs while this TUI session or a "
+                "foreground CLI host is active. Enabled does not mean a daemon is installed."
+            ).format(
+                root_path=self._root_path or status_label("unknown"),
+                selected_path=self._selected_path or status_label("none"),
+                action=action,
+            )
         )
         self.query_one("#monitor-history-summary", Static).update(
-            "[b]No monitor definition covers the current selection.[/b]\n"
-            f"{action}\n"
-            "Saved definitions need this TUI session or disktide watch --all."
+            translate(
+                "[b]No monitor definition covers the current selection.[/b]\n{action}\nSaved definitions"
+                " need this TUI session or disktide watch --all."
+            ).format(
+                action=action,
+            )
         )
 
     def _render_overview(self, summary, history: MonitorHistory | None = None) -> None:
@@ -669,7 +863,11 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             current.current_value,
             definition.metric.value,
         )
-        next_due = status.next_due_at.isoformat() if status.next_due_at else "not scheduled"
+        next_due = (
+            status.next_due_at.isoformat()
+            if status.next_due_at
+            else translate("not scheduled")
+        )
         # `last_success_at` is a fact about *sampling*: when a host last
         # completed a run. Snapshots imported by the CLI, or taken by an
         # earlier session, leave it unset while the history is full of
@@ -679,80 +877,110 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             last_success = status.last_success_at.isoformat()
         elif latest_point is not None:
             last_success = (
-                f"not in this session · latest snapshot "
-                f"{latest_point.astimezone().strftime('%Y-%m-%d %H:%M')}"
+                translate(
+                    "not in this session · latest snapshot {strftime}"
+                ).format(
+                    strftime=latest_point.astimezone().strftime('%Y-%m-%d %H:%M'),
+                )
             )
         else:
             last_success = "never"
         host = (
             f"{status.host_type} · {status.host_id}"
             if status.host_id
-            else "none — enabled is not a background daemon"
+            else translate("none — enabled is not a background daemon")
         )
         problem = status.blocked_reason or status.last_error or "none"
         self.query_one("#monitor-overview", Static).update(
-            f"[b]Lifecycle[/b]\n"
-            f"  Desired: {definition.desired_state.value}\n"
-            f"  Activity: {status.activity.value}\n"
-            f"  Health: {status.health.value}\n"
-            f"  Host: {host}\n\n"
-            f"[b]Schedule[/b]\n"
-            f"  Every: {format_duration(definition.interval_seconds)} "
-            f"(start-to-start)\n"
-            f"  Next due: {next_due}\n"
-            f"  Last success: {last_success}\n"
-            f"  Last duration: {status.last_duration_seconds or 0:.1f}s\n\n"
-            f"[b]Scan resource[/b]\n"
-            f"  Queue: "
-            f"{status.resource_queue_position or 'active/not queued'}\n"
-            f"  Queue reason: {status.resource_queue_reason or 'none'}\n"
-            f"  Active slot: {status.resource_active_slot or 'none'}\n"
-            f"  Effective workers: {status.effective_workers or 'unknown'}\n"
-            f"  Worker policy: {status.worker_policy_reason or 'not sampled'}\n\n"
-            f"[b]Watch & confidence[/b]\n"
-            f"  Mode: {status.watch_mode.value}\n"
-            f"  Backend: {status.event_backend or 'none'} · "
-            f"{status.event_backend_status}\n"
-            f"  Watched roots: {status.watched_root_count}\n"
-            f"  Actual descriptors: {status.watch_diagnostics.descriptor_count} / "
-            f"{status.watch_diagnostics.descriptor_limit or 'unknown'}\n"
-            f"  Instance / queue limits: "
-            f"{status.watch_diagnostics.instance_limit or 'unknown'} / "
-            f"{status.watch_diagnostics.queued_event_limit or 'unknown'}\n"
-            f"  Registration: {status.watch_diagnostics.registration_strategy} · "
-            f"{status.watch_diagnostics.registration_duration_seconds or 0:.4f}s\n"
-            f"  Watch warning: {status.watch_diagnostics.warning or 'none'}\n"
-            f"  Fallback: {status.watch_diagnostics.fallback_reason or 'none'}\n"
-            f"  Pending dirty paths: {status.pending_dirty_paths}\n"
-            f"  Reconciliation: {status.reconciliation_state.value}\n"
-            f"  Last event: "
-            f"{status.last_event_at.isoformat() if status.last_event_at else 'never'}\n"
-            f"  Last local: "
-            f"{status.last_local_reconciliation_at.isoformat() if status.last_local_reconciliation_at else 'never'}\n"
-            f"  Last full: "
-            f"{status.last_full_reconciliation_at.isoformat() if status.last_full_reconciliation_at else 'never'}\n"
-            f"  Overflow/recovery: {status.overflow_count}/{status.recovery_count}\n"
-            f"  Degraded: {status.degraded_reason or 'no'}\n\n"
-            f"[b]Current measurement[/b]\n"
-            f"  Source: {'provisional' if current.active else 'canonical'}\n"
-            f"  Base snapshot: {current.base_snapshot_id or 'none'}\n"
-            f"  Canonical/current: {canonical_value} / {current_value}\n"
-            f"  Updated: {current.updated_at.isoformat() if current.updated_at else 'never'}\n"
-            f"  Confidence: {current.confidence.value}\n"
-            f"  Overlays: {current.overlay_count} / "
-            f"{current.overlay_node_count} node(s)\n"
-            f"  Invalidated: {current.invalidation_reason or 'no'}\n\n"
-            f"[b]Definition[/b]\n"
-            f"  Metric: {definition.metric.value}\n"
-            f"  Policy: {definition.policy.summary()}\n"
-            f"  Revision: {definition.revision}\n\n"
-            f"[b]Operations[/b]\n"
-            f"  Snapshots: {summary.snapshot_count}\n"
-            f"  Active alerts: {summary.alert_count}\n"
-            f"  Estimated data: "
-            f"{humanize.naturalsize(summary.database_bytes, binary=True)}\n"
-            f"  Last retention: {status.last_retention_summary or 'never'}\n"
-            f"  Problem: {problem}"
+            translate(
+                "[b]Lifecycle[/b]\n  Desired: {desired}\n  Activity: {activity}\n  Health: {health}\n  Host: "
+                "{host}\n\n[b]Schedule[/b]\n  Every: {interval} (start-to-start)\n  Next due: "
+                "{next_due}\n  Last success: {last_success}\n  Last duration: {duration}s\n\n[b]Scan "
+                "resource[/b]\n  Queue: {queue}\n  Queue reason: {queue_reason}\n  Active slot: "
+                "{active_slot}\n  Effective workers: {workers}\n  Worker policy: {worker_policy}\n\n"
+                "[b]Watch & confidence[/b]\n  Mode: {watch_mode}\n  Backend: {backend} · "
+                "{event_backend_status}\n  Watched roots: {watched_root_count}\n  Actual descriptors: "
+                "{descriptor_count} / {descriptor_limit}\n  Instance / queue limits: "
+                "{instance_limit} / {queue_limit}\n  Registration: {registration_strategy} · "
+                "{registration_seconds}s\n  Watch warning: {warning}\n  Fallback: "
+                "{fallback}\n  Pending dirty paths: {pending_dirty_paths}\n  "
+                "Reconciliation: {reconciliation}\n  Last event: {last_event}\n  "
+                "Last local: {last_local}\n  Last full: {last_full}\n  "
+                "Overflow/recovery: {overflow_count}/{recovery_count}\n  Degraded: "
+                "{degraded}\n\n[b]Current measurement[/b]\n  Source: "
+                "{current_source}\n  Base snapshot: {base_snapshot}\n  "
+                "Canonical/current: {canonical_value} / {current_value}\n  Updated: "
+                "{updated}\n  Confidence: {confidence}\n  "
+                "Overlays: {overlay_count} / {overlay_node_count} node(s)\n  Invalidated: "
+                "{invalidated}\n\n[b]Definition[/b]\n  Metric: "
+                "{metric}\n  Policy: {summary}\n  Revision: {revision}\n\n"
+                "[b]Operations[/b]\n  Snapshots: {snapshot_count}\n  Active alerts: {alert_count}\n  "
+                "Estimated data: {database_size}\n  Last retention: {last_retention}"
+                "\n  Problem: {problem}"
+            ).format(
+                desired=status_label(definition.desired_state.value),
+                activity=status_label(status.activity.value),
+                health=status_label(status.health.value),
+                host=host,
+                interval=format_duration(definition.interval_seconds),
+                next_due=next_due,
+                last_success=last_success,
+                duration=f"{status.last_duration_seconds or 0:.1f}",
+                queue=status.resource_queue_position
+                or translate("active/not queued"),
+                queue_reason=diagnostic(status.resource_queue_reason or "none"),
+                active_slot=status.resource_active_slot or status_label("none"),
+                workers=status.effective_workers or status_label("unknown"),
+                worker_policy=worker_policy_text(status.worker_policy_reason)
+                if status.worker_policy_reason
+                else translate("not sampled"),
+                watch_mode=status_label(status.watch_mode.value),
+                backend=status.event_backend or status_label("none"),
+                event_backend_status=status_label(status.event_backend_status),
+                watched_root_count=status.watched_root_count,
+                descriptor_count=status.watch_diagnostics.descriptor_count,
+                descriptor_limit=status.watch_diagnostics.descriptor_limit or status_label("unknown"),
+                instance_limit=status.watch_diagnostics.instance_limit or status_label("unknown"),
+                queue_limit=status.watch_diagnostics.queued_event_limit
+                or status_label("unknown"),
+                registration_strategy=status_label(status.watch_diagnostics.registration_strategy),
+                registration_seconds=f"{status.watch_diagnostics.registration_duration_seconds or 0:.4f}",
+                warning=diagnostic(status.watch_diagnostics.warning or "none"),
+                fallback=diagnostic(status.watch_diagnostics.fallback_reason or "none"),
+                pending_dirty_paths=status.pending_dirty_paths,
+                reconciliation=status_label(status.reconciliation_state.value),
+                last_event=status.last_event_at.isoformat()
+                if status.last_event_at
+                else status_label("never"),
+                last_local=status.last_local_reconciliation_at.isoformat()
+                if status.last_local_reconciliation_at
+                else status_label("never"),
+                last_full=status.last_full_reconciliation_at.isoformat()
+                if status.last_full_reconciliation_at
+                else status_label("never"),
+                overflow_count=status.overflow_count,
+                recovery_count=status.recovery_count,
+                degraded=diagnostic(status.degraded_reason or "no"),
+                current_source=status_label("provisional" if current.active else "canonical"),
+                base_snapshot=current.base_snapshot_id or status_label("none"),
+                canonical_value=canonical_value,
+                current_value=current_value,
+                updated=current.updated_at.isoformat()
+                if current.updated_at
+                else status_label("never"),
+                confidence=status_label(current.confidence.value),
+                overlay_count=current.overlay_count,
+                overlay_node_count=current.overlay_node_count,
+                invalidated=diagnostic(current.invalidation_reason or "no"),
+                metric=status_label(definition.metric.value),
+                summary=policy_text(definition.policy),
+                revision=definition.revision,
+                snapshot_count=summary.snapshot_count,
+                alert_count=summary.alert_count,
+                database_size=format_size(summary.database_bytes, binary=True),
+                last_retention=diagnostic(status.last_retention_summary or "never"),
+                problem=diagnostic(problem),
+            )
         )
 
     @staticmethod
@@ -760,8 +988,8 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         if value is None:
             return "unavailable"
         if metric == "files":
-            return f"{value:,} files"
-        return humanize.naturalsize(value, binary=True)
+            return translate("{value} files").format(value=f"{value:,}")
+        return format_size(value, binary=True)
 
     def _render_history(
         self,
@@ -779,7 +1007,11 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             self.query_one("#monitor-growth-sunburst", SunburstView).set_diff(None)
             self.query_one("#monitor-growth-heatmap", GrowthHeatmap).set_model(None)
             self.query_one("#monitor-history-summary", Static).update(
-                f"{collection}\nNo canonical snapshots yet. Press R to capture one."
+                translate(
+                    "{collection}\nNo canonical snapshots yet. Press R to capture one."
+                ).format(
+                    collection=collection,
+                )
             )
             return
 
@@ -796,12 +1028,12 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             pair = (
                 f"#{space_time.baseline_id} → #{space_time.target_id}"
                 if space_time.baseline_id and space_time.target_id
-                else "waiting for two compatible snapshots"
+                else translate("waiting for two compatible snapshots")
             )
             confidence = (
-                "partial confidence"
+                translate("partial confidence")
                 if space_time.diff is not None and space_time.diff.partial
-                else "full confidence"
+                else translate("full confidence")
             )
             problem = (
                 f" · {space_time.diff_error}" if space_time.diff_error else ""
@@ -830,7 +1062,9 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             diff_treemap.set_diff(None)
             growth_sunburst.set_diff(None)
             heatmap.set_model(None)
-            message = self._space_time_error or "Space-time visual service unavailable"
+            message = self._space_time_error or translate(
+                "Space-time visual service unavailable"
+            )
             self.query_one("#monitor-history-summary", Static).update(
                 f"{collection}\n{message}"
             )
@@ -846,16 +1080,16 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             for point in reversed(points):
                 flags = []
                 if point.partial:
-                    flags.append("partial")
+                    flags.append(translate("partial"))
                 if point.pinned:
-                    flags.append("pinned")
+                    flags.append(translate("pinned"))
                 if point.rollup_kind:
                     flags.append(point.rollup_kind)
                 table.add_row(
                     point.timestamp.astimezone().strftime("%Y-%m-%d %H:%M"),
                     self._short_path(relative_label(path, root_path)),
                     self._history_value(point.value, history.monitor.metric.value),
-                    point.state.value,
+                    status_label(point.state.value),
                     str(point.monitor_revision or "—"),
                     ", ".join(flags) or "—",
                     key=f"{path}:{point.snapshot_id}",
@@ -884,21 +1118,26 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         keys = self._fit_clauses(
             [
                 legend_text(),
-                "b/v set pair",
-                "l latest",
-                "z zoom",
-                "Shift+←/→ pan",
+                translate("b/v set pair"),
+                translate("l latest"),
+                translate("z zoom"),
+                translate("Shift+←/→ pan"),
             ],
             width,
         )
         marks = self._fit_clauses(
-            [f"Trend marks: {marker_legend_text()}"], width
+            [
+                translate("Trend marks: {marker_legend_text}").format(
+                    marker_legend_text=marker_legend_text(),
+                )
+            ],
+            width,
         )
         if width <= 0 or visible_width(legend_text()) <= width:
             lines.extend([keys, marks])
         else:
             # Not even the state legend fits; both rows would only wrap.
-            lines.append("? for the legend, chart marks and keys")
+            lines.append(translate("? for the legend, chart marks and keys"))
         return "\n".join(lines)
 
     @staticmethod
@@ -936,18 +1175,26 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
     def _history_collection_line(self, summary: MonitorSummary) -> str:
         definition = summary.definition
         status = summary.status
-        points = f"{summary.snapshot_count} canonical point(s)"
+        points = translate("{snapshot_count} canonical point(s)").format(
+            snapshot_count=summary.snapshot_count,
+        )
         if definition.desired_state is MonitorDesiredState.PAUSED:
-            return f"Collection paused · {points} · press p to resume"
+            return translate("Collection paused · {points} · press p to resume").format(
+                points=points,
+            )
         if status.activity is MonitorActivityState.NO_HOST:
             # `press S`, from the binding itself. Sampling moved onto Shift
             # (a key that is consequential in any mode is consequential in
             # every mode) and this sentence was left telling people to
             # press `s`, which does nothing on this screen.
             return (
-                f"Collection stopped · {points} · no active host; "
-                f"press {self._key_display('monitor.sampling', 'S')} "
-                "or run disktide watch --all"
+                translate(
+                    "Collection stopped · {points} · no active host; press {_key_display} or run "
+                    "disktide watch --all"
+                ).format(
+                    points=points,
+                    _key_display=self._key_display('monitor.sampling', 'S'),
+                )
             )
         next_due = (
             status.next_due_at.astimezone().strftime("%m-%d %H:%M")
@@ -955,40 +1202,51 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             else "unscheduled"
         )
         return (
-            f"Collection active · {points} · {status.activity.value} · "
-            f"next full {next_due}"
+            translate(
+                "Collection active · {points} · {value} · next full {next_due}"
+            ).format(
+                points=points,
+                value=status.activity.value,
+                next_due=next_due,
+            )
         )
 
     def _render_alerts(self, rules: list[AlertRule], alert_events: list) -> None:
         self.query_one("#monitor-alert-summary", Static).update(
-            f"{len(rules)} rule(s). Press a to add, Shift+A to edit, "
-            "x to enable/disable, Backspace to remove."
+            translate(
+                "{len} rule(s). Press a to add, Shift+A to edit, x to enable/disable, Backspace to "
+                "remove."
+            ).format(
+                len=len(rules),
+            )
         )
         rules_table = self.query_one("#monitor-alert-rules", DataTable)
         rules_table.clear()
         self._selected_rule_id = None
         for rule in rules:
             rules_table.add_row(
-                rule.kind.value,
+                status_label(rule.kind.value),
                 self._short_path(rule.path),
                 f"{rule.threshold:g}",
-                rule.severity.value,
-                "enabled" if rule.enabled else "disabled",
+                status_label(rule.severity.value),
+                translate("enabled") if rule.enabled else translate("disabled"),
                 key=str(rule.id),
             )
         events_table = self.query_one("#monitor-alert-events", DataTable)
         events_table.clear()
         for event in alert_events:
             result = (
-                f"suppressed: {event.suppression_reason}"
+                translate("suppressed: {suppression_reason}").format(
+                    suppression_reason=diagnostic(event.suppression_reason or ""),
+                )
                 if event.suppressed
-                else event.message
+                else diagnostic(event.message)
             )
             events_table.add_row(
                 event.triggered_at.astimezone().strftime("%m-%d %H:%M"),
                 str(event.rule_id or "—"),
                 result,
-                event.confidence,
+                status_label(event.confidence),
                 str(event.new_snapshot_id or "—"),
                 key=str(event.id),
             )
@@ -1001,16 +1259,23 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
     ) -> None:
         definition = summary.definition
         if preview is None:
-            text = "Retention preview unavailable."
+            text = translate("Retention preview unavailable.")
         else:
             text = (
-                f"Policy v{definition.retention.version}: keep all "
-                f"{format_duration(definition.retention.keep_all_seconds)}, "
-                f"hourly to {format_duration(definition.retention.keep_hourly_seconds)}, "
-                f"daily to {format_duration(definition.retention.keep_daily_seconds)}.\n"
-                f"Preview: keep {len(preview.keep_ids)}, prune "
-                f"{len(preview.prune_ids)}, rollups {len(preview.rollups)}, "
-                f"pinned {len(preview.pinned_ids)}. Press t to run maintenance."
+                translate(
+                    "Policy v{version}: keep all {format_duration}, hourly to {format_duration_}, "
+                    "daily to {format_duration__}.\nPreview: keep {len}, prune {len_}, rollups {len__},"
+                    " pinned {len___}. Press t to run maintenance."
+                ).format(
+                    version=definition.retention.version,
+                    format_duration=format_duration(definition.retention.keep_all_seconds),
+                    format_duration_=format_duration(definition.retention.keep_hourly_seconds),
+                    format_duration__=format_duration(definition.retention.keep_daily_seconds),
+                    len=len(preview.keep_ids),
+                    len_=len(preview.prune_ids),
+                    len__=len(preview.rollups),
+                    len___=len(preview.pinned_ids),
+                )
             )
         self.query_one("#monitor-retention-summary", Static).update(text)
         table = self.query_one("#monitor-retention-table", DataTable)
@@ -1020,17 +1285,17 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         for point in reversed(history.root_points):
             protection = []
             if point.pinned:
-                protection.append("pinned")
+                protection.append(translate("pinned"))
             if preview and point.snapshot_id in preview.keep_ids:
-                protection.append("keep")
+                protection.append(translate("keep"))
             if preview and point.snapshot_id in preview.prune_ids:
-                protection.append("prune")
+                protection.append(translate("prune"))
             if point.rollup_kind:
                 protection.append(point.rollup_kind)
             table.add_row(
                 str(point.snapshot_id),
                 point.timestamp.astimezone().strftime("%Y-%m-%d %H:%M"),
-                point.state.value,
+                status_label(point.state.value),
                 str(point.monitor_revision or "—"),
                 ", ".join(protection) or "—",
                 key=str(point.snapshot_id),
@@ -1122,7 +1387,9 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
 
     def action_set_diff_baseline(self) -> None:
         if self._selected_snapshot_id is None:
-            self.app.notify("Highlight a History row first.", severity="warning")
+            self.app.notify(
+                translate("Highlight a History row first."), severity="warning"
+            )
             return
         self._baseline_snapshot_id = self._selected_snapshot_id
         if self._target_snapshot_id == self._baseline_snapshot_id:
@@ -1131,7 +1398,9 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
 
     def action_set_diff_target(self) -> None:
         if self._selected_snapshot_id is None:
-            self.app.notify("Highlight a History row first.", severity="warning")
+            self.app.notify(
+                translate("Highlight a History row first."), severity="warning"
+            )
             return
         self._target_snapshot_id = self._selected_snapshot_id
         if self._baseline_snapshot_id == self._target_snapshot_id:
@@ -1237,10 +1506,13 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             result = self._service.run_monitor_now(monitor_id)
             if result is None:
                 self.app.call_from_thread(
-                    self.app.notify, "Run queued in the active TUI session."
+                    self.app.notify, translate("Run queued in the active TUI session.")
                 )
             elif result.run is not None:
-                message = f"Run {result.run.run_id[:8]} {result.run.status.value}"
+                message = translate("Run {value} {value_}").format(
+                    value=result.run.run_id[:8],
+                    value_=status_label(result.run.status.value),
+                )
                 self.app.call_from_thread(self.app.notify, message)
         except Exception as exc:
             self.app.call_from_thread(self._notify_error, exc)
@@ -1255,12 +1527,16 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             if result is None:
                 self.app.call_from_thread(
                     self.app.notify,
-                    "Full reconciliation queued in the active TUI session.",
+                    translate("Full reconciliation queued in the active TUI session."),
                 )
             elif result.run is not None:
                 message = (
-                    f"Reconciliation {result.run.run_id[:8]} "
-                    f"{result.run.status.value}"
+                    translate(
+                        "Reconciliation {value} {value_}"
+                    ).format(
+                        value=result.run.run_id[:8],
+                        value_=status_label(result.run.status.value),
+                    )
                 )
                 self.app.call_from_thread(self.app.notify, message)
         except Exception as exc:
@@ -1277,7 +1553,9 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
                 self._render_sampling_controls()
                 self._service.stop_session(wait=False)
                 self.app.notify(
-                    "Continuous sampling is stopping; the active scan was cancelled."
+                    translate(
+                        "Continuous sampling is stopping; the active scan was cancelled."
+                    )
                 )
             else:
                 dashboard = self._dashboard
@@ -1291,14 +1569,16 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
                 )
                 if enabled == 0:
                     self.app.notify(
-                        "Create or resume an enabled monitor first.",
+                        translate("Create or resume an enabled monitor first."),
                         severity="warning",
                     )
                     return
                 self._service.start_session(host_type="tui")
                 self.app.notify(
-                    "Continuous sampling started for all enabled monitors. "
-                    "It continues across TUI screens until stopped or the app exits."
+                    translate(
+                        "Continuous sampling started for all enabled monitors. "
+                        "It continues across TUI screens until stopped or the app exits."
+                    )
                 )
         except Exception as exc:
             self._session_stopping = False
@@ -1318,14 +1598,18 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         except OSError as exc:
             self._config.monitor.auto_start_in_tui = previous
             self.app.notify(
-                f"Could not save auto-start setting: {exc}",
+                translate("Could not save auto-start setting: {exc}").format(exc=exc),
                 severity="error",
                 timeout=8,
             )
         else:
             state = "enabled" if self._config.monitor.auto_start_in_tui else "disabled"
             self.app.notify(
-                f"Automatic sampling on future TUI launches is {state}."
+                translate(
+                    "Automatic sampling on future TUI launches is {state}."
+                ).format(
+                    state=status_label(state),
+                )
             )
         self._render_sampling_controls()
 
@@ -1346,10 +1630,13 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
 
         self.app.push_screen(
             ConfirmModal(
-                title="Archive monitor",
+                title=translate("Archive monitor"),
                 message=(
-                    f"Archive {monitor.label}? Snapshots, pins, and alert events "
-                    "will be retained."
+                    translate(
+                        "Archive {label}? Snapshots, pins, and alert events will be retained."
+                    ).format(
+                        label=monitor.label,
+                    )
                 ),
                 confirm_keys=("d",),
             ),
@@ -1361,7 +1648,7 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         history = self._history
         if snapshot_id is None or history is None:
             self.app.notify(
-                "Select a History row before pinning.", severity="warning"
+                translate("Select a History row before pinning."), severity="warning"
             )
             return
         point = next(
@@ -1375,10 +1662,20 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         try:
             if point and point.pinned:
                 self._service.unpin_snapshot(snapshot_id)
-                self.app.notify(f"Unpinned snapshot #{snapshot_id}")
+                self.app.notify(
+                    translate("Unpinned snapshot #{snapshot_id}").format(
+                        snapshot_id=snapshot_id,
+                    )
+                )
             else:
-                self._service.pin_snapshot(snapshot_id, label="Monitor Center")
-                self.app.notify(f"Pinned snapshot #{snapshot_id}")
+                self._service.pin_snapshot(
+                    snapshot_id, label=translate("Monitor Center")
+                )
+                self.app.notify(
+                    translate("Pinned snapshot #{snapshot_id}").format(
+                        snapshot_id=snapshot_id,
+                    )
+                )
         except Exception as exc:
             self._notify_error(exc)
         self._load_data()
@@ -1409,7 +1706,9 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         rule = self._selected_rule()
         monitor = self._selected_monitor()
         if rule is None or monitor is None or monitor.id is None:
-            self.app.notify("Select an alert rule first.", severity="warning")
+            self.app.notify(
+                translate("Select an alert rule first."), severity="warning"
+            )
             return
         self.app.push_screen(
             AlertEditor(
@@ -1432,7 +1731,9 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
     def action_toggle_alert(self) -> None:
         rule = self._selected_rule()
         if rule is None or rule.id is None:
-            self.app.notify("Select an alert rule first.", severity="warning")
+            self.app.notify(
+                translate("Select an alert rule first."), severity="warning"
+            )
             return
         try:
             self._service.set_alert_rule_enabled(rule.id, not rule.enabled)
@@ -1457,8 +1758,10 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
 
         self.app.push_screen(
             ConfirmModal(
-                title="Remove alert rule",
-                message="Remove this rule? Existing alert events remain in history.",
+                title=translate("Remove alert rule"),
+                message=translate(
+                    "Remove this rule? Existing alert events remain in history."
+                ),
             ),
             callback=confirmed,
         )
@@ -1473,8 +1776,13 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             )
             self.app.call_from_thread(
                 self.app.notify,
-                f"Retention {result.status}: pruned {result.pruned}, "
-                f"rollups {result.rolled_up}",
+                translate(
+                    "Retention {status}: pruned {pruned}, rollups {rolled_up}"
+                ).format(
+                    status=result.status,
+                    pruned=result.pruned,
+                    rolled_up=result.rolled_up,
+                ),
             )
         except Exception as exc:
             self.app.call_from_thread(self._notify_error, exc)
@@ -1504,13 +1812,18 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
         if event.kind is MonitorEventKind.RUN_PROGRESS:
             current = self._short_path(event.current_path or "")
             self.query_one("#monitor-session-banner", Static).update(
-                f"Monitor Center · scanning {event.progress_percent:.0f}% · {current}"
+                translate(
+                    "Monitor Center · scanning {progress_percent}% · {current}"
+                ).format(
+                    progress_percent=f"{event.progress_percent:.0f}",
+                    current=current,
+                )
             )
             return
         if event.kind is MonitorEventKind.ALERT_TRIGGERED:
             self.app.notify(
-                event.message,
-                title="Monitor alert",
+                diagnostic(event.message),
+                title=translate("Monitor alert"),
                 severity="warning",
                 timeout=8,
             )
@@ -1566,8 +1879,8 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
 
     def _notify_error(self, exc: Exception) -> None:
         self.app.notify(
-            str(exc),
-            title="Monitor action failed",
+            diagnostic(str(exc)),
+            title=translate("Monitor action failed"),
             severity="error",
             timeout=8,
         )
@@ -1587,4 +1900,4 @@ class MonitorScreen(RenderEpochRefreshMixin, Screen):
             return "—"
         if metric == "files":
             return f"{value:,}"
-        return humanize.naturalsize(value, binary=True)
+        return format_size(value, binary=True)

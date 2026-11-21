@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import humanize
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Static
 
+from disktide.i18n import format_size, status_label, translate
 from disktide.domain.cleanup import CleanupActionKind, CleanupPlan
 from disktide.models.patterns import RiskLevel
 from disktide.services.cleanup import CleanupService
@@ -79,42 +79,57 @@ class CleanupModal(ModalScreen[CleanupModalResult | None]):
         with Vertical(id="cleanup-dialog"):
             yield Static(
                 Text(
-                    f"CleanupPlan {self._plan.id[:12]} · v{self._plan.version}",
+                    translate("CleanupPlan {value} · v{version}").format(
+                        value=self._plan.id[:12],
+                        version=self._plan.version,
+                    ),
                     style="bold",
                 )
             )
             yield Static(
-                "Preview is read-only. Safe apply uses system Trash when "
-                "possible, otherwise same-filesystem quarantine."
+                translate(
+                    "Preview is read-only. Safe apply uses system Trash when "
+                    "possible, otherwise same-filesystem quarantine."
+                )
             )
             table = DataTable(id="cleanup-table")
             table.add_columns(
-                "Pack",
-                "Category",
-                "Path",
-                "Age",
-                "Estimated",
-                "Score",
-                "Confidence",
-                "Risk",
-                "Policy",
+                translate("Pack"),
+                translate("Category"),
+                translate("Path"),
+                translate("Age"),
+                translate("Estimated"),
+                translate("Score"),
+                translate("Confidence"),
+                translate("Risk"),
+                translate("Policy"),
             )
             yield table
             yield Static(
                 Text(
-                    "Estimated reclaimable: "
-                    f"{humanize.naturalsize(self._plan.estimated_reclaimable_bytes, binary=True)} "
-                    f"across {len(self._plan.active_actions)} action(s); "
-                    f"confidence {self._plan.confidence:.0%}; "
-                    f"{len(self._plan.actions) - len(self._plan.active_actions)} subsumed.",
+                    translate(
+                        "Estimated reclaimable: {naturalsize} across {len} action(s); confidence "
+                        "{confidence}; {value} subsumed."
+                    ).format(
+                        naturalsize=format_size(
+                            self._plan.estimated_reclaimable_bytes, binary=True
+                        ),
+                        len=len(self._plan.active_actions),
+                        confidence=f"{self._plan.confidence:.0%}",
+                        value=len(self._plan.actions) - len(self._plan.active_actions),
+                    ),
                     style=ink("bar_strong"),
                 )
             )
             with Vertical(id="cleanup-confirmation"):
                 yield Static(
                     Text(
-                        "Permanent delete bypasses recovery. To use the red "
-                        f'button, type exactly: {self._confirmation}',
+                        translate(
+                            "Permanent delete bypasses recovery. To use the red button, type exactly: "
+                            "{_confirmation}"
+                        ).format(
+                            _confirmation=self._confirmation,
+                        ),
                         style=ink("error_strong"),
                     )
                 )
@@ -123,20 +138,22 @@ class CleanupModal(ModalScreen[CleanupModalResult | None]):
                     id="confirm-input",
                 )
             with Horizontal(classes="button-row"):
-                yield Button("Save Preview", variant="primary", id="btn-preview")
                 yield Button(
-                    "Apply Safe Candidates",
+                    translate("Save Preview"), variant="primary", id="btn-preview"
+                )
+                yield Button(
+                    translate("Apply Safe Candidates"),
                     variant="success",
                     id="btn-apply",
                     disabled=not self._has_executable_actions,
                 )
                 yield Button(
-                    "Permanent Delete",
+                    translate("Permanent Delete"),
                     variant="error",
                     id="btn-permanent",
                     disabled=not self._has_executable_actions,
                 )
-                yield Button("Cancel", variant="default", id="btn-cancel")
+                yield Button(translate("Cancel"), variant="default", id="btn-cancel")
 
     def on_mount(self) -> None:
         table = self.query_one("#cleanup-table", DataTable)
@@ -148,19 +165,19 @@ class CleanupModal(ModalScreen[CleanupModalResult | None]):
             }[action.risk]
             table.add_row(
                 f"{action.rule_pack}@{action.rule_pack_version}",
-                action.category,
+                status_label(action.category),
                 _truncate(action.path, 34),
-                f"{action.age_days:.1f}d",
-                humanize.naturalsize(
+                translate("{age_days}d").format(age_days=f"{action.age_days:.1f}"),
+                format_size(
                     action.estimated_reclaimable_bytes,
                     binary=True,
                 ),
                 f"{action.score:.1f}",
                 f"{action.confidence:.0%}",
-                Text(action.risk.value, style=risk_style),
-                "detection-only"
+                Text(status_label(action.risk.value), style=risk_style),
+                translate("detection-only")
                 if action.detection_only
-                else action.rule_action_policy.value,
+                else translate(action.rule_action_policy.value),
             )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -174,7 +191,9 @@ class CleanupModal(ModalScreen[CleanupModalResult | None]):
             value = self.query_one("#confirm-input", Input).value
             if value != self._confirmation:
                 self.query_one("#confirm-input", Input).focus()
-                self.notify("Permanent confirmation does not match", severity="error")
+                self.notify(
+                    translate("Permanent confirmation does not match"), severity="error"
+                )
                 return
             self.dismiss(
                 CleanupModalResult(

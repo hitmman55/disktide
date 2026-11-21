@@ -60,6 +60,10 @@ def _verify_wheel(path: Path, version: str) -> str:
         required = {
             "disktide/__init__.py",
             "disktide/assets/default.tcss",
+            "disktide/assets/diagnostics.ru.json",
+            "disktide/assets/messages.ru.json",
+            "disktide/cli_i18n.py",
+            "disktide/i18n.py",
             "disktide/cleanup/actions.py",
             "disktide/cleanup/scoring.py",
             "disktide/cleanup/rulepacks/python.toml",
@@ -200,8 +204,12 @@ def _verify_sdist(path: Path, version: str) -> None:
         names = set(archive.getnames())
     required = {
         prefix + "README.md",
+        prefix + "README.ru.md",
         prefix + "pyproject.toml",
         prefix + "docs/user-guide.md",
+        prefix + "docs/user-guide.ru.md",
+        prefix + "src/disktide/assets/diagnostics.ru.json",
+        prefix + "src/disktide/assets/messages.ru.json",
         prefix + "docs/release-process.md",
         prefix + "src/disktide/assets/default.tcss",
         prefix + "src/disktide/cleanup/actions.py",

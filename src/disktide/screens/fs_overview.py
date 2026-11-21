@@ -14,8 +14,8 @@ from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen, ModalScreen
 from textual.widgets import Footer, Header, Static, DataTable, LoadingIndicator
 from rich.text import Text
-import humanize
 
+from disktide.i18n import diagnostic, format_size, status_label, translate
 from disktide.collectors.platform import get_platform_adapter
 from disktide.collectors.platform.base import PlatformAdapter
 from disktide.collectors.platform.models import (
@@ -171,9 +171,10 @@ class FSEntry:
 
     @property
     def speed_tier(self) -> str:
-        return storage_class(
+        label, _ = storage_class(
             self.fs_type, self.is_network_fs, self.is_rotational
-        )[0]
+        )
+        return translate(label)
 
     @property
     def speed_style(self) -> str:
@@ -214,7 +215,7 @@ class FSEntry:
         for i, (label, role) in enumerate(pairs):
             if i:
                 t.append(" · ", style=ink("muted"))
-            t.append(label, style=ink(role))
+            t.append(translate(label), style=ink(role))
         return t
 
 
@@ -294,7 +295,11 @@ def _load_user_quotas() -> dict[str, tuple[int, int, int]]:
     #        /dev/sda1 /home  16457M  40960M  51200M            8039       0       0
     for line in proc.stdout.splitlines():
         line = line.strip()
-        if not line or line.startswith("Disk quotas") or line.startswith("Filesystem"):
+        if (
+            not line
+            or line.startswith(translate("Disk quotas"))
+            or line.startswith(translate("Filesystem"))
+        ):
             continue
         parts = line.split()
         # Need at least: device, mountpoint, blocks, quota, limit
@@ -449,8 +454,8 @@ def _quota_cell(entry: FSEntry) -> Text:
     """Format the Quota column: 'used / limit' with a mini bar, or blank."""
     if not entry.has_quota:
         return Text("")
-    used = humanize.naturalsize(entry.quota_used_bytes, binary=True)
-    limit = humanize.naturalsize(entry.quota_hard_bytes, binary=True)
+    used = format_size(entry.quota_used_bytes, binary=True)
+    limit = format_size(entry.quota_hard_bytes, binary=True)
     pct = entry.quota_pct
     style = ink("error" if pct >= 90 else "warning" if pct >= 70 else "bar")
     t = Text()
@@ -467,14 +472,16 @@ def _format_benchmark(res: BenchmarkResult, mountpoint: str = "") -> str:
     made with different amounts of honesty.
     """
     parts = [
-        f"write {humanize.naturalsize(res.write_bps)}/s",
-        f"read ~{humanize.naturalsize(res.read_bps)}/s "
-        f"({humanize.naturalsize(res.bytes_io, binary=True)} probed)",
+        f"write {format_size(res.write_bps)}/s",
+        translate("read ~{format_size}/s ({format_size_} probed)").format(
+            format_size=format_size(res.read_bps),
+            format_size_=format_size(res.bytes_io, binary=True),
+        ),
     ]
     if res.probe_dir and res.probe_dir != mountpoint:
-        parts.append(f"in {res.probe_dir}")
+        parts.append(translate("in {probe_dir}").format(probe_dir=res.probe_dir))
     if res.truncated:
-        parts.append("stopped at the time budget")
+        parts.append(translate("stopped at the time budget"))
     return " · ".join(parts)
 
 
@@ -486,10 +493,10 @@ def _probe_message(label: str, result: ProbeResult) -> Text:
         style = ink("warning")
     else:
         style = ink("error")
-    text = Text(f"  {label}: {result.status.value}", style=style)
-    text.append(f" — {result.reason}", style="dim")
+    text = Text(f"  {translate(label)}: {status_label(result.status.value)}", style=style)
+    text.append(f" — {diagnostic(result.reason)}", style="dim")
     if result.suggestion:
-        text.append(f" · {result.suggestion}", style="dim")
+        text.append(f" · {diagnostic(result.suggestion)}", style="dim")
     return text
 
 
@@ -593,17 +600,33 @@ def _build_summary(entries: list[FSEntry]) -> Text:
     image_count, duplicate_count = len(images), len(duplicates)
 
     t = Text()
-    t.append(f"  {len(entries)} filesystem(s) mounted  |  ")
-    t.append(f"Total: {humanize.naturalsize(total_space, binary=True)}  |  ")
-    t.append(f"Used: {humanize.naturalsize(total_used, binary=True)} ({used_pct:.0f}%)")
+    t.append(translate("  {len} filesystem(s) mounted  |  ").format(len=len(entries)))
+    t.append(
+        translate("Total: {naturalsize}  |  ").format(
+            naturalsize=format_size(total_space, binary=True),
+        )
+    )
+    t.append(
+        translate("Used: {naturalsize} ({used_pct}%)").format(
+            naturalsize=format_size(total_used, binary=True),
+            used_pct=f"{used_pct:.0f}",
+        )
+    )
     folded_note = "  |  ".join(
         note for note, count in (
-            (f"{image_count} read-only image mount(s)", image_count),
-            (f"{duplicate_count} mount(s) of a listed filesystem", duplicate_count),
+            (translate("{image_count} read-only image mount(s)").format(image_count=image_count), image_count),
+            (translate(
+                 "{duplicate_count} mount(s) of a listed filesystem"
+             ).format(
+                 duplicate_count=duplicate_count,
+             ), duplicate_count),
         ) if count
     )
     if folded_note:
-        t.append(f"  |  {folded_note} folded", style=ink("muted"))
+        t.append(
+            translate("  |  {folded_note} folded").format(folded_note=folded_note),
+            style=ink("muted"),
+        )
     t.append("\n  ")
 
     # Proportional bar — each FS contributes width proportional to its total
@@ -629,13 +652,15 @@ def _build_summary(entries: list[FSEntry]) -> Text:
         # The mountpoint, not its basename: `5(128.0K)` for
         # `/snap/bare/5` named a revision number and nothing else.
         label = elide_path(e.mountpoint, 18)
-        size_str = humanize.naturalsize(e.total_bytes, binary=True, gnu=True)
+        size_str = format_size(e.total_bytes, binary=True, gnu=True)
         t.append(f"■ {label}({size_str}) ", style=e.speed_style)
     if folded:
         folded_bytes = sum(e.total_bytes for e in folded)
         t.append(
-            f"■ {len(folded)} others"
-            f"({humanize.naturalsize(folded_bytes, binary=True, gnu=True)})",
+            translate("■ {len} others({naturalsize})").format(
+                len=len(folded),
+                naturalsize=format_size(folded_bytes, binary=True, gnu=True),
+            ),
             style=ink("muted"),
         )
 
@@ -657,6 +682,7 @@ _STATUS_DISPLAY: dict[DeviceStatus, tuple[str, str]] = {
 def _block_status_cell(dev: BlockDevice) -> Text:
     status = dev.status
     label, role = _STATUS_DISPLAY[status]
+    label = translate(label)
     if status == DeviceStatus.MOUNTED and dev.mountpoint:
         label = f"● {dev.mountpoint}"
     return Text(label, style=ink(role))
@@ -683,12 +709,16 @@ def _block_tree_rows(devices: list[BlockDevice]) -> list[tuple[BlockDevice, str]
 
 def _build_block_summary(devices: list[BlockDevice]) -> Text:
     idle_count, idle_bytes = idle_summary(devices)
-    t = Text("  Block Devices", style="bold")
+    t = Text(translate("  Block Devices"), style="bold")
     if idle_count:
         t.append("   ")
         t.append(
-            f"{idle_count} disk(s) with no mounted filesystem · "
-            f"{humanize.naturalsize(idle_bytes, binary=True)} total capacity",
+            translate(
+                "{idle_count} disk(s) with no mounted filesystem · {naturalsize} total capacity"
+            ).format(
+                idle_count=idle_count,
+                naturalsize=format_size(idle_bytes, binary=True),
+            ),
             style=ink("warning"),
         )
     return t
@@ -698,9 +728,17 @@ class FSDetailModal(ModalScreen):
     """Detail popup for a single filesystem — press Esc or Enter to close."""
 
     BINDINGS = [
-        Binding("escape", "dismiss", "Close", show=True, id="fs.detail_close"),
-        Binding("enter", "dismiss", "Close", show=False, id="fs.detail_close_enter"),
-        Binding("q", "dismiss", "Close", show=False, id="fs.detail_close_q"),
+        Binding(
+            "escape", "dismiss", translate("Close"), show=True, id="fs.detail_close"
+        ),
+        Binding(
+            "enter",
+            "dismiss",
+            translate("Close"),
+            show=False,
+            id="fs.detail_close_enter",
+        ),
+        Binding("q", "dismiss", translate("Close"), show=False, id="fs.detail_close_q"),
     ]
 
     DEFAULT_CSS = """
@@ -750,40 +788,63 @@ class FSDetailModal(ModalScreen):
         with VerticalScroll(id="fs-detail-dialog"):
             yield Static(f"  {e.mountpoint}", classes="detail-title")
 
-            yield Static("  Overview", classes="detail-section")
-            yield Static(f"  Device:        {e.device}", classes="detail-row")
-            yield Static(f"  FS Type:       {e.fs_type}", classes="detail-row")
-            speed_text = Text(f"  Speed:         {e.speed_tier}", style=e.speed_style)
+            yield Static(translate("  Overview"), classes="detail-section")
+            yield Static(
+                translate("  Device:        {device}").format(device=e.device),
+                classes="detail-row",
+            )
+            yield Static(
+                translate("  FS Type:       {fs_type}").format(fs_type=e.fs_type),
+                classes="detail-row",
+            )
+            speed_text = Text(
+                translate("  Speed:         {speed_tier}").format(
+                    speed_tier=e.speed_tier,
+                ),
+                style=e.speed_style,
+            )
             yield Static(speed_text, classes="detail-row")
-            attrs = Text("  Attributes:    ")
+            attrs = Text(translate("  Attributes:    "))
             attrs.append_text(e.badges)
             yield Static(attrs, classes="detail-row")
             # Measured throughput, if this mount has been benchmarked this
             # session (press 'B' in the overview). Latest run wins.
             if self._benchmark is not None:
                 measured = Text(
-                    "  Measured:      "
-                    f"{_format_benchmark(self._benchmark, e.mountpoint)}",
+                    translate("  Measured:      {_format_benchmark}").format(
+                        _format_benchmark=_format_benchmark(
+                            self._benchmark, e.mountpoint
+                        ),
+                    ),
                     style=ink("link"),
                 )
                 yield Static(measured, classes="detail-row")
 
-            yield Static("  Disk Space", classes="detail-section")
+            yield Static(translate("  Disk Space"), classes="detail-section")
             yield Static(
-                f"  Total:         {humanize.naturalsize(e.total_bytes, binary=True)}",
+                translate("  Total:         {naturalsize}").format(
+                    naturalsize=format_size(e.total_bytes, binary=True),
+                ),
                 classes="detail-row",
             )
             yield Static(
-                f"  Used:          {humanize.naturalsize(e.used_bytes, binary=True)} ({e.usage_pct:.1f}%)",
+                translate("  Used:          {naturalsize} ({usage_pct}%)").format(
+                    naturalsize=format_size(e.used_bytes, binary=True),
+                    usage_pct=f"{e.usage_pct:.1f}",
+                ),
                 classes="detail-row",
             )
             yield Static(
-                f"  Free:          {humanize.naturalsize(e.free_bytes, binary=True)}",
+                translate("  Free:          {naturalsize}").format(
+                    naturalsize=format_size(e.free_bytes, binary=True),
+                ),
                 classes="detail-row",
             )
             if e.reserved_bytes > 0:
                 yield Static(
-                    f"  Reserved:      {humanize.naturalsize(e.reserved_bytes, binary=True)} (root-only)",
+                    translate("  Reserved:      {naturalsize} (root-only)").format(
+                        naturalsize=format_size(e.reserved_bytes, binary=True),
+                    ),
                     classes="detail-row",
                 )
             # Inline usage bar
@@ -793,18 +854,24 @@ class FSDetailModal(ModalScreen):
             yield Static(bar_text, classes="detail-row")
 
             if e.has_quota:
-                yield Static("  User Quota", classes="detail-section")
+                yield Static(translate("  User Quota"), classes="detail-section")
                 yield Static(
-                    f"  Used:          {humanize.naturalsize(e.quota_used_bytes, binary=True)}",
+                    translate("  Used:          {naturalsize}").format(
+                        naturalsize=format_size(e.quota_used_bytes, binary=True),
+                    ),
                     classes="detail-row",
                 )
                 if e.quota_soft_bytes:
                     yield Static(
-                        f"  Soft limit:    {humanize.naturalsize(e.quota_soft_bytes, binary=True)}",
+                        translate("  Soft limit:    {naturalsize}").format(
+                            naturalsize=format_size(e.quota_soft_bytes, binary=True),
+                        ),
                         classes="detail-row",
                     )
                 yield Static(
-                    f"  Hard limit:    {humanize.naturalsize(e.quota_hard_bytes, binary=True)}",
+                    translate("  Hard limit:    {naturalsize}").format(
+                        naturalsize=format_size(e.quota_hard_bytes, binary=True),
+                    ),
                     classes="detail-row",
                 )
                 bar = _usage_bar(e.quota_pct, width=20)
@@ -813,39 +880,64 @@ class FSDetailModal(ModalScreen):
                 yield Static(bar_text, classes="detail-row")
 
             if e.inode_total > 0:
-                yield Static("  Inodes", classes="detail-section")
-                yield Static(f"  Total:         {e.inode_total:,}", classes="detail-row")
+                yield Static(translate("  Inodes"), classes="detail-section")
                 yield Static(
-                    f"  Used:          {e.inode_used:,} ({e.inode_pct:.1f}%)",
+                    translate("  Total:         {inode_total}").format(
+                        inode_total=f"{e.inode_total:,}",
+                    ),
                     classes="detail-row",
                 )
-                yield Static(f"  Free:          {e.inode_free:,}", classes="detail-row")
+                yield Static(
+                    translate("  Used:          {inode_used} ({inode_pct}%)").format(
+                        inode_used=f"{e.inode_used:,}",
+                        inode_pct=f"{e.inode_pct:.1f}",
+                    ),
+                    classes="detail-row",
+                )
+                yield Static(
+                    translate("  Free:          {inode_free}").format(
+                        inode_free=f"{e.inode_free:,}",
+                    ),
+                    classes="detail-row",
+                )
 
             if e.block_size > 0:
-                yield Static("  Sizes", classes="detail-section")
+                yield Static(translate("  Sizes"), classes="detail-section")
                 yield Static(
-                    f"  Block size:    {humanize.naturalsize(e.block_size, binary=True)}",
+                    translate("  Block size:    {naturalsize}").format(
+                        naturalsize=format_size(e.block_size, binary=True),
+                    ),
                     classes="detail-row",
                 )
 
             if e.mount_options:
-                yield Static("  Mount Options", classes="detail-section")
+                yield Static(translate("  Mount Options"), classes="detail-section")
                 opts = e.mount_options.split(",")
                 # Show up to 4 options per line
                 for i in range(0, len(opts), 4):
                     chunk = ",  ".join(opts[i:i + 4])
                     yield Static(f"  {chunk}", classes="detail-row")
 
-            yield Static("  Press Esc or Enter to close", classes="detail-hint")
+            yield Static(
+                translate("  Press Esc or Enter to close"), classes="detail-hint"
+            )
 
 
 class BlockDeviceModal(ModalScreen):
     """Detail popup for a single block device — press Esc or Enter to close."""
 
     BINDINGS = [
-        Binding("escape", "dismiss", "Close", show=True, id="fs.device_close"),
-        Binding("enter", "dismiss", "Close", show=False, id="fs.device_close_enter"),
-        Binding("q", "dismiss", "Close", show=False, id="fs.device_close_q"),
+        Binding(
+            "escape", "dismiss", translate("Close"), show=True, id="fs.device_close"
+        ),
+        Binding(
+            "enter",
+            "dismiss",
+            translate("Close"),
+            show=False,
+            id="fs.device_close_enter",
+        ),
+        Binding("q", "dismiss", translate("Close"), show=False, id="fs.device_close_q"),
     ]
 
     # Both selectors, not only the id one: `FSDetailModal { align: center
@@ -866,46 +958,74 @@ class BlockDeviceModal(ModalScreen):
         with VerticalScroll(id="block-detail-dialog"):
             yield Static(f"  {d.name}", classes="detail-title")
 
-            yield Static("  Overview", classes="detail-section")
-            yield Static(f"  Type:          {d.dev_type}", classes="detail-row")
-            yield Static(f"  Size:          {humanize.naturalsize(d.size_bytes, binary=True)}", classes="detail-row")
-            if d.model:
-                yield Static(f"  Model:         {d.model}", classes="detail-row")
-            spin = {True: "HDD (rotational)", False: "SSD / flash"}.get(
-                d.is_rotational, "Unknown"
+            yield Static(translate("  Overview"), classes="detail-section")
+            yield Static(
+                translate("  Type:          {dev_type}").format(dev_type=d.dev_type),
+                classes="detail-row",
             )
-            yield Static(f"  Media:         {spin}", classes="detail-row")
+            yield Static(
+                translate("  Size:          {naturalsize}").format(
+                    naturalsize=format_size(d.size_bytes, binary=True),
+                ),
+                classes="detail-row",
+            )
+            if d.model:
+                yield Static(
+                    translate("  Model:         {model}").format(model=d.model),
+                    classes="detail-row",
+                )
+            spin = translate(
+                {True: "HDD (rotational)", False: "SSD / flash"}.get(
+                    d.is_rotational, "Unknown"
+                )
+            )
+            yield Static(
+                translate("  Media:         {spin}").format(spin=spin),
+                classes="detail-row",
+            )
 
-            yield Static("  Status", classes="detail-section")
+            yield Static(translate("  Status"), classes="detail-section")
             label, style = _STATUS_DISPLAY[d.status]
-            yield Static(Text(f"  {label}", style=style), classes="detail-row")
-            yield Static(f"  Filesystem:    {d.fstype or '(none)'}", classes="detail-row")
-            yield Static(f"  Mountpoint:    {d.mountpoint or '(not mounted)'}", classes="detail-row")
+            yield Static(Text(f"  {translate(label)}", style=style), classes="detail-row")
+            yield Static(
+                translate("  Filesystem:    {value}").format(
+                    value=d.fstype or translate("(none)")
+                ),
+                classes="detail-row",
+            )
+            yield Static(
+                translate("  Mountpoint:    {value}").format(
+                    value=d.mountpoint or translate("(not mounted)"),
+                ),
+                classes="detail-row",
+            )
 
             if d.status == DeviceStatus.RAW:
                 yield Static(
-                    Text("  No filesystem or child block devices were detected.",
+                    Text(translate("  No filesystem or child block devices were detected."),
                          style=ink("warning")),
                     classes="detail-row",
                 )
             elif d.status == DeviceStatus.UNFORMATTED:
                 yield Static(
-                    Text("  No filesystem was detected on this partition.",
+                    Text(translate("  No filesystem was detected on this partition."),
                          style=ink("warning")),
                     classes="detail-row",
                 )
 
             if d.children:
-                yield Static("  Partitions", classes="detail-section")
+                yield Static(translate("  Partitions"), classes="detail-section")
                 for c in d.children:
                     mnt = c.mountpoint or "unmounted"
                     yield Static(
-                        f"  {c.name}: {humanize.naturalsize(c.size_bytes, binary=True)}"
+                        f"  {c.name}: {format_size(c.size_bytes, binary=True)}"
                         f"  {c.fstype or '(no fs)'}  {mnt}",
                         classes="detail-row",
                     )
 
-            yield Static("  Press Esc or Enter to close", classes="detail-hint")
+            yield Static(
+                translate("  Press Esc or Enter to close"), classes="detail-hint"
+            )
 
 
 class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
@@ -917,16 +1037,16 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
         # the capital letter, which is what a terminal sends: there is no
         # `shift+<letter>` key event, and `tests/test_keymap.py` gates it.
         Binding(
-            "B", "benchmark", "Benchmark mount",
+            "B", "benchmark", translate("Benchmark mount"),
             show=True, key_display="B", id="fs.benchmark",
         ),
-        Binding("r", "refresh", "Refresh", show=False, id="fs.refresh"),
+        Binding("r", "refresh", translate("Refresh"), show=False, id="fs.refresh"),
         # Still `fs.image_mounts`: a binding id is what a user's config.toml
         # names, so it outlives the label. What it unfolds grew -- the
         # read-only package images were never the only rows that are the
         # same answer repeated.
         Binding(
-            "i", "toggle_folded_mounts", "All mounts",
+            "i", "toggle_folded_mounts", translate("All mounts"),
             show=True, id="fs.image_mounts",
         ),
     ]
@@ -1009,12 +1129,27 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
         yield Static("", id="fs-overview-summary")
         table = DataTable(id="fs-overview-table")
         table.cursor_type = "row"
-        table.add_columns("Mount", "FS Type", "Storage", "Total", "Used", "Free", "Usage", "Quota")
+        table.add_columns(
+            translate("Mount"),
+            translate("FS Type"),
+            translate("Storage"),
+            translate("Total"),
+            translate("Used"),
+            translate("Free"),
+            translate("Usage"),
+            translate("Quota"),
+        )
         yield table
         yield Static("", id="fs-overview-block-label")
         block_table = DataTable(id="fs-overview-block-table")
         block_table.cursor_type = "row"
-        block_table.add_columns("Device", "Type", "Size", "FS", "Status")
+        block_table.add_columns(
+            translate("Device"),
+            translate("Type"),
+            translate("Size"),
+            translate("FS"),
+            translate("Status"),
+        )
         yield block_table
         yield Footer()
 
@@ -1083,7 +1218,9 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
             summary_text = _build_summary(entries)
             if filesystem_probe.status is CapabilityStatus.DEGRADED:
                 summary_text.append(
-                    f"\n  Coverage: degraded — {filesystem_probe.reason}",
+                    translate("\n  Coverage: degraded — {reason}").format(
+                        reason=filesystem_probe.reason,
+                    ),
                     style=ink("warning"),
                 )
             summary.update(summary_text)
@@ -1120,9 +1257,9 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
                 e.mountpoint,
                 e.fs_type,
                 e.badges,
-                humanize.naturalsize(e.total_bytes, binary=True),
-                humanize.naturalsize(e.used_bytes, binary=True),
-                humanize.naturalsize(e.free_bytes, binary=True),
+                format_size(e.total_bytes, binary=True),
+                format_size(e.used_bytes, binary=True),
+                format_size(e.free_bytes, binary=True),
                 _usage_bar(e.usage_pct, alarming=e.alarms_on_usage),
                 _quota_cell(e),
                 key=e.mountpoint,
@@ -1136,16 +1273,16 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
         piles = (
             (
                 images,
-                "read-only image mounts",
+                translate("read-only image mounts"),
                 "squashfs/loop",
                 "__image_mounts__",
-                humanize.naturalsize(
+                format_size(
                     sum(e.total_bytes for e in images), binary=True
                 ),
             ),
             (
                 duplicates,
-                "mounts of a listed filesystem",
+                translate("mounts of a listed filesystem"),
                 "bind",
                 "__duplicate_mounts__",
                 dash,
@@ -1157,7 +1294,7 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
             table.add_row(
                 Text(f"{len(folded)} {label}", style=ink("muted")),
                 Text(kind, style=ink("muted")),
-                Text("press i to expand", style=ink("muted")),
+                Text(translate("press i to expand"), style=ink("muted")),
                 total,
                 dash,
                 dash,
@@ -1173,9 +1310,9 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
             return
         self._populate_fs_table()
         self.app.notify(
-            "Showing every mount"
+            translate("Showing every mount")
             if self._show_folded_mounts
-            else "Image mounts and repeat views folded into one row each",
+            else translate("Image mounts and repeat views folded into one row each"),
             timeout=3,
         )
 
@@ -1185,7 +1322,7 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
         table.clear()
         self._block_rows = []
         if not self._block_devices:
-            label.update(_probe_message("Block devices", self._block_probe))
+            label.update(_probe_message(translate("Block devices"), self._block_probe))
             table.display = False
             return
 
@@ -1196,7 +1333,7 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
             table.add_row(
                 display_name,
                 dev.dev_type,
-                humanize.naturalsize(dev.size_bytes, binary=True, gnu=True),
+                format_size(dev.size_bytes, binary=True, gnu=True),
                 dev.fstype or "—",
                 _block_status_cell(dev),
             )
@@ -1232,8 +1369,12 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
         """
         if self._benchmark_running is not None:
             self.notify(
-                f"Already benchmarking {self._benchmark_running}. "
-                "One probe at a time, or they measure each other.",
+                translate(
+                    "Already benchmarking {_benchmark_running}. One probe at a time, or they measure "
+                    "each other."
+                ).format(
+                    _benchmark_running=self._benchmark_running,
+                ),
                 severity="warning",
                 timeout=5,
             )
@@ -1250,9 +1391,12 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
         probe_dir = writable_probe_dir(mountpoint)
         if probe_dir is None:
             self.notify(
-                f"{mountpoint}: nothing writable on it to probe — "
-                "the mount root and this user's usual directories under it "
-                "are all read-only.",
+                translate(
+                    "{mountpoint}: nothing writable on it to probe — the mount root and this user's "
+                    "usual directories under it are all read-only."
+                ).format(
+                    mountpoint=mountpoint,
+                ),
                 severity="warning",
                 timeout=8,
             )
@@ -1260,9 +1404,9 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
         headroom = entry.quota_headroom_bytes
 
         where = (
-            f"a temporary file in {probe_dir}"
+            translate("a temporary file in {probe_dir}").format(probe_dir=probe_dir)
             if probe_dir != mountpoint
-            else "a temporary file"
+            else translate("a temporary file")
         )
 
         def _on_confirm(confirmed: bool | None) -> None:
@@ -1270,7 +1414,10 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
                 return
             self._benchmark_running = mountpoint
             self.notify(
-                f"Benchmarking {mountpoint} (writing {where})…",
+                translate("Benchmarking {mountpoint} (writing {where})…").format(
+                    mountpoint=mountpoint,
+                    where=where,
+                ),
                 timeout=4,
             )
             self._run_benchmark(mountpoint, probe_dir, headroom)
@@ -1278,10 +1425,14 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
         self.app.push_screen(
             ConfirmModal(
                 message=(
-                    f"Benchmark {mountpoint}?\n"
-                    f"This writes {where} to measure throughput."
+                    translate(
+                        "Benchmark {mountpoint}?\nThis writes {where} to measure throughput."
+                    ).format(
+                        mountpoint=mountpoint,
+                        where=where,
+                    )
                 ),
-                title="Benchmark mount",
+                title=translate("Benchmark mount"),
                 confirm_keys=("B",),
             ),
             callback=_on_confirm,
@@ -1313,7 +1464,10 @@ class FSOverviewScreen(RenderEpochRefreshMixin, Screen):
         self._benchmark_running = None
         if res is None:
             self.notify(
-                f"{mountpoint}: benchmark failed — {error}",
+                translate("{mountpoint}: benchmark failed — {error}").format(
+                    mountpoint=mountpoint,
+                    error=diagnostic(error),
+                ),
                 severity="warning",
                 timeout=8,
             )

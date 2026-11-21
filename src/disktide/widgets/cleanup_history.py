@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import humanize
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Static
 
+from disktide.i18n import format_size, translate
 from disktide.domain.cleanup import CleanupSavingsSummary
 
 
@@ -51,26 +51,32 @@ class CleanupHistoryModal(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="cleanup-history-dialog"):
             yield Static(
-                f"Cleanup savings history · grouped by {self._group_by}",
+                translate("Cleanup savings history · grouped by {_group_by}").format(
+                    _group_by=self._group_by,
+                ),
                 classes="title",
             )
             yield Static(
-                "Estimated, isolated, purged, actual reclaimed, and undone are "
-                "kept separate. Quarantine isolation is not free space."
+                translate(
+                    "Estimated, isolated, purged, actual reclaimed, and undone are "
+                    "kept separate. Quarantine isolation is not free space."
+                )
             )
             table = DataTable(id="cleanup-history-table")
             table.add_columns(
                 self._group_by.title(),
-                "Actions",
-                "Estimated",
-                "Isolated",
-                "Purged",
-                "Actual",
-                "Undone",
+                translate("Actions"),
+                translate("Estimated"),
+                translate("Isolated"),
+                translate("Purged"),
+                translate("Actual"),
+                translate("Undone"),
             )
             yield table
             with Horizontal(id="cleanup-history-actions"):
-                yield Button("Close", id="cleanup-history-close", variant="primary")
+                yield Button(
+                    translate("Close"), id="cleanup-history-close", variant="primary"
+                )
 
     def on_mount(self) -> None:
         table = self.query_one("#cleanup-history-table", DataTable)
@@ -91,4 +97,4 @@ class CleanupHistoryModal(ModalScreen[None]):
 
 
 def _size(value: int) -> str:
-    return humanize.naturalsize(value, binary=True)
+    return format_size(value, binary=True)

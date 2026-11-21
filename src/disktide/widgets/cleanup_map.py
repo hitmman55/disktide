@@ -13,6 +13,7 @@ from textual.binding import Binding
 from textual.message import Message
 from textual.strip import Strip
 
+from disktide.i18n import translate
 from disktide.widgets import OpaqueStripMixin
 from disktide.viz.colors import ink
 from textual.widget import Widget
@@ -106,11 +107,33 @@ class CleanupMap(OpaqueStripMixin, Widget, can_focus=True):
     """Keyboard-selectable cleanup map synchronized with the plan table."""
 
     BINDINGS = [
-        Binding("left", "previous", "Previous candidate", show=False, id="map.previous"),
-        Binding("up", "previous", "Previous candidate", show=False, id="map.previous_up"),
-        Binding("right", "next", "Next candidate", show=False, id="map.next"),
-        Binding("down", "next", "Next candidate", show=False, id="map.next_down"),
-        Binding("enter", "select", "Select candidate", show=False, id="map.select"),
+        Binding(
+            "left",
+            "previous",
+            translate("Previous candidate"),
+            show=False,
+            id="map.previous",
+        ),
+        Binding(
+            "up",
+            "previous",
+            translate("Previous candidate"),
+            show=False,
+            id="map.previous_up",
+        ),
+        Binding(
+            "right", "next", translate("Next candidate"), show=False, id="map.next"
+        ),
+        Binding(
+            "down", "next", translate("Next candidate"), show=False, id="map.next_down"
+        ),
+        Binding(
+            "enter",
+            "select",
+            translate("Select candidate"),
+            show=False,
+            id="map.select",
+        ),
     ]
 
     DEFAULT_CSS = """
@@ -189,7 +212,7 @@ class CleanupMap(OpaqueStripMixin, Widget, can_focus=True):
             return Strip.blank(max(0, width))
         model = self._model()
         if not model.points:
-            text = "No cleanup opportunities match enabled rule packs"
+            text = translate("No cleanup opportunities match enabled rule packs")
             if y == height // 2:
                 return Strip([Segment(text[:width].center(width), Style(dim=True))])
             return Strip.blank(width)
@@ -224,7 +247,7 @@ class CleanupMap(OpaqueStripMixin, Widget, can_focus=True):
         model: CleanupMapModel,
     ) -> Strip:
         if y == 0:
-            title = "Age/Size opportunities · fallback list"
+            title = translate("Age/Size opportunities · fallback list")
             return Strip([Segment(set_cell_size(title, width), Style(bold=True))])
         visible = min(len(model.points), max(0, height - 2))
         index = y - 1
@@ -240,8 +263,12 @@ class CleanupMap(OpaqueStripMixin, Widget, can_focus=True):
                 [Segment(set_cell_size(text, width), _point_style(point, selected))]
             )
         if y == height - 1:
-            suffix = f" · +{model.omitted} omitted" if model.omitted else ""
-            text = f"score · age · confidence · path{suffix}"
+            suffix = (
+                translate(" · +{count} omitted").format(count=model.omitted)
+                if model.omitted
+                else ""
+            )
+            text = translate("score · age · confidence · path") + suffix
             return Strip([Segment(set_cell_size(text, width), Style(dim=True))])
         return Strip.blank(width)
 
@@ -256,13 +283,22 @@ class CleanupMap(OpaqueStripMixin, Widget, can_focus=True):
         if y == 0:
             selected = model.points[min(self._cursor, len(model.points) - 1)]
             text = (
-                f"Age ↑ / Size →  selected {selected.score:.1f} · "
-                f"{selected.age_days:.1f}d · {selected.confidence:.0%} · {selected.path}"
+                translate(
+                    "Age ↑ / Size →  selected {score:.1f} · "
+                    "{days:.1f}d · {confidence:.0%} · {path}"
+                ).format(
+                    score=selected.score, days=selected.age_days,
+                    confidence=selected.confidence, path=selected.path,
+                )
             )
             return Strip([Segment(set_cell_size(text, width), Style(bold=True))])
         if y == height - 1:
-            suffix = f" · +{model.omitted} omitted" if model.omitted else ""
-            text = "o safe  ^ moderate  ! dangerous  @ selected" + suffix
+            suffix = (
+                translate(" · +{count} omitted").format(count=model.omitted)
+                if model.omitted
+                else ""
+            )
+            text = translate("o safe  ^ moderate  ! dangerous  @ selected") + suffix
             return Strip([Segment(set_cell_size(text, width), Style(dim=True))])
         plot_y = plot_height - y
         cells: dict[int, tuple[CleanupMapPoint, bool]] = {}

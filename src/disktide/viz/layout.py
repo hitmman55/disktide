@@ -7,6 +7,7 @@ from heapq import nlargest
 
 from disktide.domain.live_view import LiveViewNode
 from disktide.domain.metrics import MetricId
+from disktide.i18n import translate
 from disktide.models.tree import FSNode
 
 
@@ -190,7 +191,7 @@ def _aggregate_node(
     path = f"{parent.path.rstrip('/')}/.disktide-other-{depth}"
     if key:
         path = f"{path}-{key}"
-    name = f"… {count:,} more"
+    name = translate("… {count:,} more").format(count=count)
     if live:
         return LiveViewNode(
             name=name,

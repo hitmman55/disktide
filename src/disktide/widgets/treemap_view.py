@@ -12,6 +12,7 @@ from disktide.widgets import OpaqueStripMixin
 from textual.widget import Widget
 
 from disktide.domain.live_view import LiveViewNode
+from disktide.i18n import translate
 from disktide.metrics import (
     DEFAULT_METRIC,
     METRIC_NAMES,
@@ -278,7 +279,7 @@ class TreemapView(OpaqueStripMixin, Widget):
         if self._node is not None and not metric_available(self._node, self._metric):
             if y == self.size.height // 2:
                 label = METRIC_NAMES.get(self._metric, self._metric)
-                message = f"{label} unavailable"[: self.size.width]
+                message = translate("{label} unavailable").format(label=label)[: self.size.width]
                 return Strip([
                     Segment(message.center(self.size.width), Style(dim=True))
                 ])

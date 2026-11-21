@@ -7,6 +7,7 @@ from pathlib import Path
 
 import humanize
 
+from disktide.i18n import diagnostic, format_size, status_label, translate
 from disktide import __version__
 from disktide.domain.delta import (
     CompareResult,
@@ -423,48 +424,84 @@ def _compare_policy(baseline, target, add) -> None:
 
 def render_compare_result(result: CompareResult, *, limit: int = 10) -> str:
     lines = [
-        f"Snapshot comparison: #{result.baseline.id} → #{result.target.id}",
-        f"  Root: {result.target.root_path}",
-        f"  Compatibility: {result.compatibility.decision.value}",
+        translate("Snapshot comparison: #{id} → #{id_}").format(
+            id=result.baseline.id,
+            id_=result.target.id,
+        ),
+        translate("  Root: {root_path}").format(root_path=result.target.root_path),
+        translate("  Compatibility: {value}").format(
+            value=status_label(result.compatibility.decision.value)
+        ),
     ]
     for issue in result.compatibility.issues:
-        marker = "BLOCK" if issue.severity is CompatibilitySeverity.INCOMPATIBLE else "WARN"
+        marker = (
+            translate("BLOCK")
+            if issue.severity is CompatibilitySeverity.INCOMPATIBLE
+            else translate("WARN")
+        )
         lines.append(
-            f"  [{marker}] {issue.field}: {issue.message} "
+            f"  [{marker}] {issue.field}: {diagnostic(issue.message)} "
             f"({issue.old_value!r} → {issue.new_value!r})"
         )
-        lines.append(f"          Resolution: {issue.resolution}")
+        lines.append(
+            translate("          Resolution: {resolution}").format(
+                resolution=diagnostic(issue.resolution),
+            )
+        )
     if result.blocked:
         lines.append(
-            "  Trusted diff blocked. Re-run with matching policies or pass "
-            "--raw to inspect an explicitly untrusted diff."
+            translate(
+                "  Trusted diff blocked. Re-run with matching policies or pass "
+                "--raw to inspect an explicitly untrusted diff."
+            )
         )
         return "\n".join(lines)
 
-    confidence = "partial" if (
+    confidence = translate("partial") if (
         result.baseline.partial
         or result.target.partial
         or result.baseline.error_count
         or result.target.error_count
-    ) else "full"
+    ) else translate("full")
     if result.raw and not result.compatibility.trusted:
-        confidence = "raw/untrusted"
+        confidence = translate("raw/untrusted")
     lines.extend(
         [
-            f"  Confidence: {confidence}",
-            f"  Logical delta: {_signed_bytes(result.total_logical_delta)}",
-            f"  Allocated delta: {_optional_signed_bytes(result.total_allocated_delta)}",
-            f"  Unique delta: {_optional_signed_bytes(result.total_unique_delta)}",
-            f"  File-count delta: {result.total_file_count_delta:+,}",
-            "  Directory churn: "
-            f"{sum(delta.is_dir for delta in result.new_paths)} new, "
-            f"{sum(delta.is_dir for delta in result.removed_paths)} removed",
+            translate("  Confidence: {confidence}").format(
+                confidence=status_label(confidence)
+            ),
+            translate("  Logical delta: {_signed_bytes}").format(
+                _signed_bytes=_signed_bytes(result.total_logical_delta),
+            ),
+            translate("  Allocated delta: {_optional_signed_bytes}").format(
+                _optional_signed_bytes=_optional_signed_bytes(
+                    result.total_allocated_delta
+                ),
+            ),
+            translate("  Unique delta: {_optional_signed_bytes}").format(
+                _optional_signed_bytes=_optional_signed_bytes(
+                    result.total_unique_delta
+                ),
+            ),
+            translate("  File-count delta: {total_file_count_delta}").format(
+                total_file_count_delta=f"{result.total_file_count_delta:+,}",
+            ),
+            translate("  Directory churn: {sum} new, {sum_} removed").format(
+                sum=sum((delta.is_dir for delta in result.new_paths)),
+                sum_=sum((delta.is_dir for delta in result.removed_paths)),
+            ),
         ]
     )
-    _append_delta_section(lines, "Top growth", result.growing, result, limit)
-    _append_delta_section(lines, "Top shrink", result.shrinking, result, limit)
-    _append_delta_section(lines, "New paths", result.new_paths, result, limit)
-    _append_delta_section(lines, "Removed paths", result.removed_paths, result, limit)
+    _append_delta_section(lines, translate("Top growth"), result.growing, result, limit)
+    _append_delta_section(
+        lines, translate("Top shrink"), result.shrinking, result, limit
+    )
+    _append_delta_section(
+        lines, translate("New paths"), result.new_paths, result, limit
+    )
+    _append_delta_section(
+        lines, translate("Removed paths"), result.removed_paths, result, limit
+    )
     file_changes = tuple(
         sorted(
             result.file_count_changes,
@@ -472,14 +509,14 @@ def render_compare_result(result: CompareResult, *, limit: int = 10) -> str:
         )
     )
     if file_changes:
-        lines.append("  File-count changes:")
+        lines.append(translate("  File-count changes:"))
         for delta in file_changes[:limit]:
             lines.append(
                 f"    {delta.file_count_delta:+8,}  "
                 f"{_display_path(delta.path, result.target.root_path)}"
             )
     if not result.deltas:
-        lines.append("  No measured path changes.")
+        lines.append(translate("  No measured path changes."))
     return "\n".join(lines)
 
 
@@ -488,7 +525,7 @@ def _append_delta_section(lines, title, deltas, result, limit) -> None:
         return
     lines.append(f"  {title}:")
     for delta in deltas[:limit]:
-        kind = "dir" if delta.is_dir else "file"
+        kind = status_label("dir" if delta.is_dir else "file")
         lines.append(
             f"    {_signed_bytes(delta.delta):>12}  [{kind}] "
             f"{_display_path(delta.path, result.target.root_path)}"
@@ -505,11 +542,11 @@ def _display_path(path: str, root_path: str) -> str:
 
 def _signed_bytes(value: int) -> str:
     sign = "+" if value >= 0 else "-"
-    return f"{sign}{humanize.naturalsize(abs(value), binary=True)}"
+    return f"{sign}{format_size(abs(value), binary=True)}"
 
 
 def _optional_signed_bytes(value: int | None) -> str:
-    return "unavailable" if value is None else _signed_bytes(value)
+    return status_label("unavailable") if value is None else _signed_bytes(value)
 
 
 def _aware_utc(value: datetime) -> datetime:

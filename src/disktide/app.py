@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from textual import events
-from textual.app import App
+from textual.app import App, SystemCommand
 from textual.binding import Binding
+from textual.command import CommandPalette
+from textual.screen import Screen
 
+from disktide.i18n import translate
 from disktide import APP_NAME
 from disktide.clipboard import (
     ClipboardPlan,
@@ -31,7 +34,7 @@ from disktide.glyphs import (
     use_web_safe_scrollbars,
     use_web_safe_toggle_buttons,
 )
-from disktide.commands import BindingCommands
+from disktide.commands import BindingCommands, LocalizedCommandPalette
 from disktide.keys import MODE, resolve_keymap
 from disktide.repositories import default_snapshot_repository
 from disktide.repositories.snapshots import SnapshotRepository
@@ -60,7 +63,7 @@ class DiskTideApp(App):
     """Interactive terminal disk usage explorer."""
 
     TITLE = APP_NAME
-    SUB_TITLE = "Disk Usage Explorer"
+    SUB_TITLE = translate("Disk Usage Explorer")
     # The palette is what makes the third tier of the keymap free: every
     # action is reachable by name, so a binding no longer has to earn a key
     # to be discoverable. Turning it on is the prerequisite for the footer
@@ -69,6 +72,21 @@ class DiskTideApp(App):
     # Textual's own providers (themes, quit, screenshot) plus one that walks
     # this app's bindings, so every action is findable by name.
     COMMANDS = App.COMMANDS | {BindingCommands}
+
+    def get_system_commands(self, screen: Screen) -> Iterable[SystemCommand]:
+        for command in super().get_system_commands(screen):
+            yield command._replace(
+                title=translate(command.title), help=translate(command.help)
+            )
+
+    def action_command_palette(self) -> None:
+        if self.use_command_palette and not CommandPalette.is_open(self):
+            self.push_screen(
+                LocalizedCommandPalette(
+                    id="--command-palette",
+                    placeholder=translate("Search for commands…"),
+                )
+            )
 
     # Textual draws a good deal of its stock chrome from the eighth-block
     # and quadrant glyphs -- `tall` on Input, Button, Checkbox, Switch and
@@ -189,19 +207,19 @@ class DiskTideApp(App):
         # hand. Keep the four adjacent: Footer groups with itertools.groupby,
         # which only ever sees consecutive runs.
         Binding(
-            "1", "switch_mode('explorer')", "Explorer",
+            "1", "switch_mode('explorer')", translate("Explorer"),
             show=True, group=MODE, id="app.mode_explorer",
         ),
         Binding(
-            "2", "switch_mode('monitor')", "Monitor",
+            "2", "switch_mode('monitor')", translate("Monitor"),
             show=True, group=MODE, id="app.mode_monitor",
         ),
         Binding(
-            "3", "switch_mode('fs_overview')", "FS Overview",
+            "3", "switch_mode('fs_overview')", translate("FS Overview"),
             show=True, group=MODE, id="app.mode_fs_overview",
         ),
         Binding(
-            "4", "switch_mode('cleanup')", "Cleanup",
+            "4", "switch_mode('cleanup')", translate("Cleanup"),
             show=True, group=MODE, id="app.mode_cleanup",
         ),
         # `?` means help everywhere else in the world; it used to open
@@ -210,14 +228,14 @@ class DiskTideApp(App):
         # the cell-aspect nudges to the Settings screen that already has a
         # field for them.
         Binding(
-            "question_mark", "show_keymap", "Keys",
+            "question_mark", "show_keymap", translate("Keys"),
             show=True, key_display="?", id="app.keymap",
         ),
         Binding(
-            "comma", "push_screen('settings')", "Settings",
+            "comma", "push_screen('settings')", translate("Settings"),
             show=False, key_display=",", id="app.settings",
         ),
-        Binding("q", "quit", "Quit", show=True, id="app.quit"),
+        Binding("q", "quit", translate("Quit"), show=True, id="app.quit"),
     ]
 
     def __init__(
@@ -496,17 +514,17 @@ class DiskTideApp(App):
         self._warned_degraded = True
         if status.read_only:
             message = (
-                "The snapshot database is read-only. Existing history can "
-                "be viewed, but new snapshots will not be saved."
+                translate("The snapshot database is read-only. Existing history can "
+                "be viewed, but new snapshots will not be saved.")
             )
         else:
             message = (
-                "The storage database is unavailable. Snapshots and history "
-                "won't be saved this session; file exploration still works."
+                translate("The storage database is unavailable. Snapshots and history "
+                "won't be saved this session; file exploration still works.")
             )
         self.notify(
             message,
-            title="Running without persistence",
+            title=translate("Running without persistence"),
             severity="warning",
             timeout=10,
         )
@@ -521,9 +539,11 @@ class DiskTideApp(App):
         if not self._forced_ansi:
             return
         self.notify(
-            "16-colour terminal detected: using the ANSI theme. "
-            "`disktide doctor` explains how to get full colour.",
-            title="Colour depth",
+            translate(
+                "16-colour terminal detected: using the ANSI theme. "
+                "`disktide doctor` explains how to get full colour."
+            ),
+            title=translate("Colour depth"),
             timeout=8,
         )
 
@@ -710,7 +730,7 @@ class DiskTideApp(App):
             except Exception as exc:
                 self.notify(
                     f"{type(exc).__name__}: {exc}",
-                    title="Monitor setup failed",
+                    title=translate("Monitor setup failed"),
                     severity="error",
                     timeout=8,
                 )
@@ -743,8 +763,8 @@ class DiskTideApp(App):
 
         self.push_screen(
             ConfirmModal(
-                message=f"Quit {APP_NAME}?",
-                title="Quit",
+                message=translate("Quit {APP_NAME}?").format(APP_NAME=APP_NAME),
+                title=translate("Quit"),
                 confirm_keys=("q",),
             ),
             callback=_on_confirm,
@@ -807,7 +827,8 @@ class DiskTideApp(App):
             # `check_action` already refuses the keys; this covers a caller
             # that reaches the action some other way.
             self.notify(
-                "Choose a directory first.", severity="warning",
+                translate("Choose a directory first."),
+                severity="warning",
             )
             return
         if mode == "explorer":
@@ -815,7 +836,7 @@ class DiskTideApp(App):
         elif mode == "cleanup":
             if not self._config.ui.show_cleanup:
                 self.notify(
-                    "Cleanup mode is disabled. Enable it in Settings (,).",
+                    translate("Cleanup mode is disabled. Enable it in Settings (,)."),
                     severity="warning",
                 )
                 return

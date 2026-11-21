@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import humanize
 
 from disktide.domain.metrics import MetricId
+from disktide.i18n import format_size, language, translate
 from disktide.models.tree import FSNode
 
 # Selectable metrics, in keyboard-toggle order.
@@ -13,17 +13,21 @@ DEFAULT_METRIC = MetricId.LOGICAL.value
 
 # Display names for the indicator line and headings.
 METRIC_NAMES = {
-    MetricId.LOGICAL.value: "Logical",
-    MetricId.ALLOCATED.value: "Allocated",
-    MetricId.UNIQUE.value: "Unique",
-    MetricId.FILES.value: "Files",
+    MetricId.LOGICAL.value: translate("Logical"),
+    MetricId.ALLOCATED.value: translate("Allocated"),
+    MetricId.UNIQUE.value: translate("Unique"),
+    MetricId.FILES.value: translate("Files"),
 }
 
 METRIC_EXPLANATIONS = {
-    MetricId.LOGICAL.value: "apparent payload bytes (st_size)",
-    MetricId.ALLOCATED.value: "allocated payload bytes, counting every hardlink path",
-    MetricId.UNIQUE.value: "allocated payload bytes with hardlinks counted once",
-    MetricId.FILES.value: "files and symlink entries",
+    MetricId.LOGICAL.value: translate("apparent payload bytes (st_size)"),
+    MetricId.ALLOCATED.value: translate(
+        "allocated payload bytes, counting every hardlink path"
+    ),
+    MetricId.UNIQUE.value: translate(
+        "allocated payload bytes with hardlinks counted once"
+    ),
+    MetricId.FILES.value: translate("files and symlink entries"),
 }
 
 
@@ -56,8 +60,10 @@ def metric_text(node: FSNode, metric: MetricId | str) -> str:
     selected = MetricId.parse(metric)
     value = metric_value(node, selected)
     if value is None:
-        return "Unavailable"
+        return translate("Unavailable")
     if selected is MetricId.FILES:
         n = node.file_count
+        if language() == "ru":
+            return f"файлов: {n:,}"
         return f"{n:,} file" if n == 1 else f"{n:,} files"
-    return humanize.naturalsize(value, binary=True)
+    return format_size(value, binary=True)

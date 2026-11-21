@@ -67,6 +67,7 @@ from disktide.domain.snapshot import (
 
 log = logging.getLogger(__name__)
 
+from disktide.i18n import translate
 from disktide.models.tree import FSNode, LeafNode
 from disktide.paths import database_file
 from disktide.textsafe import load_text, store_text
@@ -449,8 +450,10 @@ class Database:
                 failure_reason = f"{type(exc).__name__}: {exc}"
                 failure_exc = exc
                 log.warning(
-                    "Could not open database at %s (%s); attempting "
-                    "read-only recovery before falling back to memory.",
+                    translate(
+                        "Could not open database at %s (%s); attempting "
+                        "read-only recovery before falling back to memory."
+                    ),
                     self._path,
                     exc,
                 )
@@ -1165,9 +1168,11 @@ class Database:
             # Pre-v3 schema row without is_baseline/baseline_id columns.
             # This can happen if the database has not been migrated yet.
             log.warning(
-                "Snapshot row %s uses pre-v3 schema; run the migration "
-                "to upgrade (delete and recreate the database, or launch "
-                "disktide once with migrations enabled).",
+                translate(
+                    "Snapshot row %s uses pre-v3 schema; run the migration "
+                    "to upgrade (delete and recreate the database, or launch "
+                    "disktide once with migrations enabled)."
+                ),
                 row[0],
             )
         timestamp = datetime.fromisoformat(row[2])
@@ -3067,7 +3072,7 @@ class Database:
             self.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             self.conn.execute("VACUUM")
         except sqlite3.Error:
-            log.debug("database compaction skipped", exc_info=True)
+            log.debug(translate("database compaction skipped"), exc_info=True)
 
     # ── Deletion log ──
 

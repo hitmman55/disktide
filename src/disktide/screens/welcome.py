@@ -14,6 +14,7 @@ from textual.screen import Screen
 from textual.suggester import Suggester
 from textual.widgets import Static, Input, Button, Checkbox
 
+from disktide.i18n import translate
 from disktide import APP_NAME, CLI_NAME, __version__
 
 # Limit scandir iterations to avoid blocking on huge directories (e.g. /home).
@@ -134,14 +135,14 @@ def _build_suggestions(
             seen.add(resolved)
             suggestions.append(_Suggestion(label=label, path=path))
 
-    _add("Current directory", cwd)
+    _add(translate("Current directory"), cwd)
     if saved is not None:
-        _add("Saved default", saved)
+        _add(translate("Saved default"), saved)
     if last_visited is not None:
-        _add("Last visited", last_visited)
+        _add(translate("Last visited"), last_visited)
     if recent:
         for p in recent:
-            _add("Recent", p)
+            _add(translate("Recent"), p)
 
     return suggestions
 
@@ -215,7 +216,7 @@ class WelcomeScreen(Screen[tuple[str, bool]]):
     """
 
     BINDINGS = [
-        Binding("escape", "quit_app", "Quit", show=False, id="welcome.quit"),
+        Binding("escape", "quit_app", translate("Quit"), show=False, id="welcome.quit"),
     ]
 
     def __init__(
@@ -244,24 +245,24 @@ class WelcomeScreen(Screen[tuple[str, bool]]):
 
         with Vertical(id="welcome-dialog"):
             yield Static(
-                f"[bold]{APP_NAME}[/bold] v{__version__}\n"
-                "Interactive terminal disk usage explorer",
+                translate(
+                    "[bold]{APP_NAME}[/bold] v{__version__}\nInteractive terminal disk usage explorer"
+                ).format(
+                    APP_NAME=APP_NAME,
+                    __version__=__version__,
+                ),
                 id="welcome-title",
             )
             yield Static(
-                "[dim]TUI keys:[/dim]  "
-                "[bold]1[/bold] Explorer  "
-                "[bold]2[/bold] Monitor  "
-                "[bold]3[/bold] FS Overview  "
-                "[bold]4[/bold] Cleanup\n"
-                "           "
-                "[bold]?[/bold] Keys  "
-                "[bold],[/bold] Settings  "
-                "[bold]q[/bold] Quit\n"
-                "[dim]CLI:[/dim]       "
-                f"{CLI_NAME} [bold]scan[/bold] | [bold]watch[/bold] | "
-                "[bold]cleanup[/bold] <path>, [bold]doctor[/bold]  "
-                "[dim](outside TUI)[/dim]",
+                translate(
+                    "[dim]TUI keys:[/dim]  [bold]1[/bold] Explorer  [bold]2[/bold] Monitor  "
+                    "[bold]3[/bold] FS Overview  [bold]4[/bold] Cleanup\n           [bold]?[/bold] Keys"
+                    "  [bold],[/bold] Settings  [bold]q[/bold] Quit\n[dim]CLI:[/dim]       {CLI_NAME} "
+                    "[bold]scan[/bold] | [bold]watch[/bold] | [bold]cleanup[/bold] <path>, "
+                    "[bold]doctor[/bold]  [dim](outside TUI)[/dim]"
+                ).format(
+                    CLI_NAME=CLI_NAME,
+                ),
                 id="welcome-commands",
             )
 
@@ -272,26 +273,28 @@ class WelcomeScreen(Screen[tuple[str, bool]]):
             )
             yield Input(
                 value=self._suggestions[0].path if self._suggestions else "",
-                placeholder="Enter a directory path...",
+                placeholder=translate("Enter a directory path..."),
                 suggester=PathSuggester(),
                 id="path-input",
             )
             yield Static("", id="completions-display", classes="completions-display")
             yield Static(
-                "[dim][bold]Enter[/bold] explore  "
+                translate("[dim][bold]Enter[/bold] explore  "
                 "[bold]\u2192[/bold] accept suggestion  "
-                "[bold]\u2191\u2193[/bold] switch paths[/dim]",
+                "[bold]\u2191\u2193[/bold] switch paths[/dim]"),
                 id="welcome-tab-hint",
             )
 
             yield Checkbox(
-                "Save as default path",
+                translate("Save as default path"),
                 value=False,
                 id="welcome-save-default",
             )
             with Horizontal(classes="button-row"):
-                yield Button("Explore", variant="primary", id="welcome-explore")
-                yield Button("Quit", variant="default", id="welcome-quit")
+                yield Button(
+                    translate("Explore"), variant="primary", id="welcome-explore"
+                )
+                yield Button(translate("Quit"), variant="default", id="welcome-quit")
 
     def _render_suggestions(self) -> str:
         """Render all suggestion rows as a single Rich-markup string."""
@@ -379,7 +382,7 @@ class WelcomeScreen(Screen[tuple[str, bool]]):
         path_input = self.query_one("#path-input", Input)
         raw = path_input.value.strip()
         if not raw:
-            self.notify("Please enter a path", severity="error")
+            self.notify(translate("Please enter a path"), severity="error")
             return
 
         try:
@@ -391,13 +394,20 @@ class WelcomeScreen(Screen[tuple[str, bool]]):
             # out, and an exception raised in a message handler is Textual's
             # fatal path -- a typo would take the whole app down.
             self.notify(
-                f"Cannot read {raw}: {exc.strerror or exc}. "
-                "Enter a path to a directory you can open.",
+                translate(
+                    "Cannot read {raw}: {value}. Enter a path to a directory you can open."
+                ).format(
+                    raw=raw,
+                    value=exc.strerror or exc,
+                ),
                 severity="error",
             )
             return
         if not is_dir:
-            self.notify(f"Not a directory: {resolved}", severity="error")
+            self.notify(
+                translate("Not a directory: {resolved}").format(resolved=resolved),
+                severity="error",
+            )
             return
 
         save_default = self.query_one("#welcome-save-default", Checkbox).value

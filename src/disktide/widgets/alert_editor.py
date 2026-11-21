@@ -10,6 +10,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Select, Static, Switch
 
+from disktide.i18n import diagnostic, translate
 from disktide.config import format_duration, parse_duration, parse_size
 from disktide.domain.alerts import AlertKind, AlertRule, AlertSeverity
 from disktide.domain.metrics import MetricId
@@ -28,10 +29,24 @@ class AlertEditor(ModalScreen[AlertRule | None]):
     """Rule editor shared by the Monitor Center Alerts tab."""
 
     BINDINGS = [
-        Binding("escape", "cancel", "Cancel", show=False, id="alert.cancel"),
-        Binding("ctrl+s", "save", "Save", show=True, id="alert.save"),
-        Binding("down", "focus_next", "Next", show=False, priority=True, id="alert.field_next"),
-        Binding("up", "focus_previous", "Previous", show=False, priority=True, id="alert.field_previous"),
+        Binding("escape", "cancel", translate("Cancel"), show=False, id="alert.cancel"),
+        Binding("ctrl+s", "save", translate("Save"), show=True, id="alert.save"),
+        Binding(
+            "down",
+            "focus_next",
+            translate("Next"),
+            show=False,
+            priority=True,
+            id="alert.field_next",
+        ),
+        Binding(
+            "up",
+            "focus_previous",
+            translate("Previous"),
+            show=False,
+            priority=True,
+            id="alert.field_previous",
+        ),
     ]
 
     DEFAULT_CSS = """
@@ -114,26 +129,29 @@ class AlertEditor(ModalScreen[AlertRule | None]):
         threshold = self._threshold_text(rule) if rule else "4MiB"
         with Vertical(id="alert-editor-dialog"):
             yield Static(
-                "Edit alert rule" if rule else "Add alert rule",
+                translate("Edit alert rule") if rule else translate("Add alert rule"),
                 classes="alert-title",
             )
             with Horizontal(classes="alert-row"):
-                yield Label("Target path", classes="alert-label")
+                yield Label(translate("Target path"), classes="alert-label")
                 yield Input(
                     value=rule.path if rule else self._default_path,
                     id="alert-path",
                     classes="alert-input",
                 )
             with Horizontal(classes="alert-row"):
-                yield Label("Rule", classes="alert-label")
+                yield Label(translate("Rule"), classes="alert-label")
                 yield Select(
                     [
-                        ("Absolute size", AlertKind.ABSOLUTE_SIZE.value),
-                        ("Absolute growth", AlertKind.ABSOLUTE_GROWTH.value),
-                        ("Percentage growth", AlertKind.PERCENTAGE_GROWTH.value),
-                        ("Free space", AlertKind.FREE_SPACE.value),
-                        ("Free inodes", AlertKind.INODE_FREE.value),
-                        ("New large item", AlertKind.NEW_LARGE_ITEM.value),
+                        (translate("Absolute size"), AlertKind.ABSOLUTE_SIZE.value),
+                        (translate("Absolute growth"), AlertKind.ABSOLUTE_GROWTH.value),
+                        (
+                            translate("Percentage growth"),
+                            AlertKind.PERCENTAGE_GROWTH.value,
+                        ),
+                        (translate("Free space"), AlertKind.FREE_SPACE.value),
+                        (translate("Free inodes"), AlertKind.INODE_FREE.value),
+                        (translate("New large item"), AlertKind.NEW_LARGE_ITEM.value),
                     ],
                     value=kind.value,
                     allow_blank=False,
@@ -141,20 +159,20 @@ class AlertEditor(ModalScreen[AlertRule | None]):
                     classes="alert-select",
                 )
             with Horizontal(classes="alert-row"):
-                yield Label("Threshold", classes="alert-label")
+                yield Label(translate("Threshold"), classes="alert-label")
                 yield Input(
                     value=threshold,
                     id="alert-threshold",
                     classes="alert-input",
                 )
             with Horizontal(classes="alert-row"):
-                yield Label("Metric", classes="alert-label")
+                yield Label(translate("Metric"), classes="alert-label")
                 yield Select(
                     [
-                        ("Logical bytes", "logical"),
-                        ("Allocated bytes", "allocated"),
-                        ("Unique allocated", "unique"),
-                        ("File count", "files"),
+                        (translate("Logical bytes"), "logical"),
+                        (translate("Allocated bytes"), "allocated"),
+                        (translate("Unique allocated"), "unique"),
+                        (translate("File count"), "files"),
                     ],
                     value=rule.metric.value if rule else "logical",
                     allow_blank=False,
@@ -162,7 +180,7 @@ class AlertEditor(ModalScreen[AlertRule | None]):
                     classes="alert-select",
                 )
             with Horizontal(classes="alert-row"):
-                yield Label("Window", classes="alert-label")
+                yield Label(translate("Window"), classes="alert-label")
                 yield Input(
                     value=(
                         "24h"
@@ -171,17 +189,17 @@ class AlertEditor(ModalScreen[AlertRule | None]):
                         if rule.window_seconds
                         else ""
                     ),
-                    placeholder="none",
+                    placeholder=translate("none"),
                     id="alert-window",
                     classes="alert-input",
                 )
             with Horizontal(classes="alert-row"):
-                yield Label("Severity", classes="alert-label")
+                yield Label(translate("Severity"), classes="alert-label")
                 yield Select(
                     [
-                        ("Info", "info"),
-                        ("Warning", "warning"),
-                        ("Critical", "critical"),
+                        (translate("Info"), "info"),
+                        (translate("Warning"), "warning"),
+                        (translate("Critical"), "critical"),
                     ],
                     value=rule.severity.value if rule else "warning",
                     allow_blank=False,
@@ -189,7 +207,7 @@ class AlertEditor(ModalScreen[AlertRule | None]):
                     classes="alert-select",
                 )
             with Horizontal(classes="alert-row"):
-                yield Label("Cooldown", classes="alert-label")
+                yield Label(translate("Cooldown"), classes="alert-label")
                 yield Input(
                     value=(
                         format_duration(rule.cooldown_seconds)
@@ -200,17 +218,19 @@ class AlertEditor(ModalScreen[AlertRule | None]):
                     classes="alert-input",
                 )
             with Horizontal(classes="alert-row"):
-                yield Label("Enabled", classes="alert-label")
+                yield Label(translate("Enabled"), classes="alert-label")
                 yield Switch(value=rule.enabled if rule else True, id="alert-enabled")
             yield Static(
-                "Partial snapshots keep the event audit but suppress the "
-                "high-confidence trigger. Growth rules use the selected window.",
+                translate(
+                    "Partial snapshots keep the event audit but suppress the "
+                    "high-confidence trigger. Growth rules use the selected window."
+                ),
                 id="alert-editor-hint",
             )
             yield Static("", id="alert-editor-error")
             with Horizontal(classes="alert-buttons"):
-                yield Button("Save", variant="primary", id="alert-save")
-                yield Button("Cancel", id="alert-cancel")
+                yield Button(translate("Save"), variant="primary", id="alert-save")
+                yield Button(translate("Cancel"), id="alert-cancel")
 
     def on_mount(self) -> None:
         self.query_one("#alert-path", Input).focus()
@@ -231,7 +251,7 @@ class AlertEditor(ModalScreen[AlertRule | None]):
         try:
             path = self.query_one("#alert-path", Input).value.strip()
             if not path:
-                raise ValueError("Target path is required")
+                raise ValueError(translate("Target path is required"))
             kind = AlertKind(str(self.query_one("#alert-kind", Select).value))
             threshold_text = self.query_one(
                 "#alert-threshold", Input
@@ -251,9 +271,9 @@ class AlertEditor(ModalScreen[AlertRule | None]):
             ).value.strip()
             cooldown = 0 if not cooldown_text else parse_duration(cooldown_text)
             if window is not None and window <= 0:
-                raise ValueError("Window must be greater than zero")
+                raise ValueError(translate("Window must be greater than zero"))
             if cooldown < 0:
-                raise ValueError("Cooldown cannot be negative")
+                raise ValueError(translate("Cooldown cannot be negative"))
             values = dict(
                 monitor_id=self._monitor_id,
                 path=path,
@@ -275,7 +295,7 @@ class AlertEditor(ModalScreen[AlertRule | None]):
                 else replace(self._rule, **values)
             )
         except (TypeError, ValueError) as exc:
-            error.update(str(exc))
+            error.update(diagnostic(str(exc)))
             return
         self.dismiss(rule)
 

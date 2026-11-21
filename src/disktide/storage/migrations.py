@@ -9,6 +9,8 @@ from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import quote
 
+from disktide.i18n import translate
+
 CURRENT_VERSION = 11
 
 #: Pages copied per `sqlite3.Connection.backup` step. Small enough that a
@@ -82,7 +84,6 @@ MIGRATIONS: dict[int, list[str]] = {
         # ── Destructive migration: path interning + delta storage ──
         # Drop old nodes table and its indexes
         "DROP TABLE IF EXISTS nodes",
-
         # Path interning table — each unique path stored once
         """CREATE TABLE paths (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,11 +93,9 @@ MIGRATIONS: dict[int, list[str]] = {
             depth INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (parent_id) REFERENCES paths(id)
         )""",
-
         # Add baseline tracking to snapshots
         "ALTER TABLE snapshots ADD COLUMN is_baseline INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE snapshots ADD COLUMN baseline_id INTEGER REFERENCES snapshots(id) ON DELETE SET NULL",
-
         # New nodes table — only baseline snapshots store rows here
         """CREATE TABLE nodes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,7 +110,6 @@ MIGRATIONS: dict[int, list[str]] = {
             FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE,
             FOREIGN KEY (path_id) REFERENCES paths(id)
         )""",
-
         # Deltas table — non-baseline snapshots store only changed dirs
         """CREATE TABLE deltas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,14 +125,12 @@ MIGRATIONS: dict[int, list[str]] = {
             FOREIGN KEY (snapshot_id) REFERENCES snapshots(id) ON DELETE CASCADE,
             FOREIGN KEY (path_id) REFERENCES paths(id)
         )""",
-
         # Indexes
         "CREATE INDEX idx_nodes_snapshot ON nodes(snapshot_id)",
         "CREATE INDEX idx_nodes_path_id ON nodes(path_id, snapshot_id)",
         "CREATE INDEX idx_deltas_snapshot ON deltas(snapshot_id)",
         "CREATE INDEX idx_deltas_path_id ON deltas(path_id, snapshot_id)",
         "CREATE INDEX idx_snapshots_baseline ON snapshots(baseline_id)",
-
         # Existing snapshots lost their node data — clean them out
         "DELETE FROM alert_events",
         "DELETE FROM snapshots",
@@ -694,10 +690,15 @@ def _create_backup(
     partial_path = _partial_backup_path(backup_path)
     partial_path.unlink(missing_ok=True)
     size_mib = database_path.stat().st_size / (1024 * 1024)
-    prefix = (
-        f"Migrating database {database_path} ({size_mib:,.0f} MiB) from "
-        f"schema {current_version} to {target_version}: backing up to "
-        f"{backup_path}"
+    prefix = translate(
+        "Migrating database {path} ({size:,.0f} MiB) from schema {current} "
+        "to {target}: backing up to {backup}"
+    ).format(
+        path=database_path,
+        size=size_mib,
+        current=current_version,
+        target=target_version,
+        backup=backup_path,
     )
 
     def report(_status: int, remaining: int, total: int) -> None:
@@ -720,7 +721,11 @@ def _create_backup(
     backup_conn.close()
     os.replace(partial_path, backup_path)
     if progress is not None:
-        progress(f"{prefix} … done in {time.monotonic() - started:.0f} s")
+        progress(
+            translate("{prefix} … done in {seconds:.0f} s").format(
+                prefix=prefix, seconds=time.monotonic() - started
+            )
+        )
     return backup_path
 
 

@@ -19,6 +19,13 @@ from textual.widgets import (
     Switch,
 )
 
+from disktide.i18n import (
+    diagnostic,
+    format_size,
+    status_label,
+    translate,
+    worker_policy_text,
+)
 from disktide.config import (
     DEFAULT_VIZ,
     VIZ_CHOICES,
@@ -87,8 +94,11 @@ def cell_aspect_hint() -> str:
     mechanism = mechanisms.get(measured.source)
     if mechanism is None:
         return (
-            f"unmeasured — assuming {measured.value:.1f}; "
-            "set it if the disc looks oval"
+            translate(
+                "unmeasured — assuming {value}; set it if the disc looks oval"
+            ).format(
+                value=f'{measured.value:.1f}',
+            )
         )
     return f"measured {measured.value:.2f} ({mechanism})"
 
@@ -136,14 +146,34 @@ class SettingsScreen(Screen):
     """Configuration settings screen."""
 
     BINDINGS = [
-        Binding("escape", "dismiss_settings", "Back", show=True, id="settings.back"),
+        Binding(
+            "escape",
+            "dismiss_settings",
+            translate("Back"),
+            show=True,
+            id="settings.back",
+        ),
         # Arrow keys move focus between fields, like Tab/Shift+Tab.
         # `priority=True` so Select/Input widgets don't swallow them
         # when they have no useful arrow-key behaviour of their own
         # (Inputs use Home/End and ←/→ for caret movement; Selects
         # only need ↑/↓ when the dropdown is open).
-        Binding("down", "focus_next_field", "Down", show=True, priority=True, id="settings.field_next"),
-        Binding("up", "focus_previous_field", "Up", show=True, priority=True, id="settings.field_previous"),
+        Binding(
+            "down",
+            "focus_next_field",
+            translate("Down"),
+            show=True,
+            priority=True,
+            id="settings.field_next",
+        ),
+        Binding(
+            "up",
+            "focus_previous_field",
+            translate("Up"),
+            show=True,
+            priority=True,
+            id="settings.field_previous",
+        ),
     ]
 
     DEFAULT_CSS = """
@@ -264,11 +294,13 @@ class SettingsScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         with VerticalScroll(id="settings-container"):
-            yield Static("Settings", classes="title")
+            yield Static(translate("Settings"), classes="title")
             yield Static("")
 
-            yield Static("System Information", classes="section-title")
-            yield Static("  Detecting...", id="sysinfo-cpus", classes="sysinfo-value")
+            yield Static(translate("System Information"), classes="section-title")
+            yield Static(
+                translate("  Detecting..."), id="sysinfo-cpus", classes="sysinfo-value"
+            )
             yield Static("", id="sysinfo-host", classes="sysinfo-value")
             yield Static("", id="sysinfo-memory", classes="sysinfo-value")
             yield Static("", id="sysinfo-load", classes="sysinfo-value")
@@ -277,55 +309,57 @@ class SettingsScreen(Screen):
             yield Static("", id="sysinfo-dbsize", classes="sysinfo-value")
 
             yield Static("")
-            yield Static("Scan Performance", classes="section-title")
+            yield Static(translate("Scan Performance"), classes="section-title")
             with Horizontal(classes="setting-row"):
-                yield Label("Workers", classes="setting-label")
+                yield Label(translate("Workers"), classes="setting-label")
                 yield Input(
-                    placeholder="auto",
+                    placeholder=translate("auto"),
                     id="workers-input",
                     classes="setting-input",
                 )
                 yield Label("", id="workers-hint", classes="input-hint")
 
             with Horizontal(classes="setting-row"):
-                yield Label("Max depth", classes="setting-label")
+                yield Label(translate("Max depth"), classes="setting-label")
                 yield Input(
-                    placeholder="unlimited",
+                    placeholder=translate("unlimited"),
                     id="max-depth-input",
                     classes="setting-input",
                 )
-                yield Label("(blank = unlimited)", classes="input-hint")
+                yield Label(translate("(blank = unlimited)"), classes="input-hint")
 
             with Horizontal(classes="setting-row"):
-                yield Label("One filesystem", classes="setting-label")
+                yield Label(translate("One filesystem"), classes="setting-label")
                 yield Switch(
                     value=self._config.scan.one_file_system,
                     id="one-file-system",
                 )
 
             with Horizontal(classes="setting-row"):
-                yield Label("Exclude pseudo filesystems", classes="setting-label")
+                yield Label(
+                    translate("Exclude pseudo filesystems"), classes="setting-label"
+                )
                 yield Switch(
                     value=self._config.scan.exclude_pseudo_filesystems,
                     id="exclude-pseudo-filesystems",
                 )
 
             with Horizontal(classes="setting-row"):
-                yield Label("Exclude snapshot dirs", classes="setting-label")
+                yield Label(translate("Exclude snapshot dirs"), classes="setting-label")
                 yield Switch(
                     value=self._config.scan.exclude_snapshot_dirs,
                     id="exclude-snapshot-dirs",
                 )
 
             yield Static("")
-            yield Static("UI Settings", classes="section-title")
+            yield Static(translate("UI Settings"), classes="section-title")
             with Horizontal(classes="setting-row"):
-                yield Label("Default visualization", classes="setting-label")
+                yield Label(translate("Default visualization"), classes="setting-label")
                 yield Select(
                     [
-                        ("Treemap", "treemap"),
-                        ("Sunburst", "sunburst"),
-                        ("Details", "details"),
+                        (translate("Treemap"), "treemap"),
+                        (translate("Sunburst"), "sunburst"),
+                        (translate("Details"), "details"),
                     ],
                     value=(
                         self._config.ui.default_viz
@@ -338,10 +372,10 @@ class SettingsScreen(Screen):
                 )
 
             with Horizontal(classes="setting-row"):
-                yield Label("Color theme", classes="setting-label")
+                yield Label(translate("Color theme"), classes="setting-label")
                 theme = sanitize_theme(self._config.ui.color_theme)
                 yield Select(
-                    THEME_OPTIONS,
+                    [(translate(label), key) for label, key in THEME_OPTIONS],
                     value=theme,
                     id="color-theme",
                     classes="viz-select",
@@ -354,31 +388,35 @@ class SettingsScreen(Screen):
                 )
 
             with Horizontal(classes="setting-row"):
-                yield Label("Hostname-aware paths", classes="setting-label")
+                yield Label(translate("Hostname-aware paths"), classes="setting-label")
                 yield Switch(
                     value=self._config.ui.hostname_aware_paths,
                     id="hostname-aware-paths",
                 )
                 yield Label(
-                    f"(host: {current_hostname()})",
+                    translate("(host: {current_hostname})").format(
+                        current_hostname=current_hostname()
+                    ),
                     classes="input-hint",
                 )
 
             with Horizontal(classes="setting-row"):
-                yield Label("Safe rendering (web shells)", classes="setting-label")
+                yield Label(
+                    translate("Safe rendering (web shells)"), classes="setting-label"
+                )
                 yield Switch(
                     value=self._config.ui.safe_rendering,
                     id="safe-rendering",
                 )
                 yield Label(
-                    "(ASCII glyphs, plain charts)",
+                    translate("(ASCII glyphs, plain charts)"),
                     classes="input-hint",
                 )
 
             with Horizontal(classes="setting-row"):
-                yield Label("Cell aspect (h/w)", classes="setting-label")
+                yield Label(translate("Cell aspect (h/w)"), classes="setting-label")
                 yield Input(
-                    placeholder="auto",
+                    placeholder=translate("auto"),
                     id="cell-aspect-input",
                     classes="setting-input",
                 )
@@ -389,23 +427,23 @@ class SettingsScreen(Screen):
                 )
 
             with Horizontal(classes="setting-row"):
-                yield Label("Mouse support", classes="setting-label")
+                yield Label(translate("Mouse support"), classes="setting-label")
                 yield Switch(
                     value=self._config.ui.mouse,
                     id="mouse-support",
                 )
                 yield Label(
-                    "(applies on next launch)",
+                    translate("(applies on next launch)"),
                     classes="input-hint",
                 )
 
             with Horizontal(classes="setting-row"):
-                yield Label("Live scan rendering", classes="setting-label")
+                yield Label(translate("Live scan rendering"), classes="setting-label")
                 yield Select(
                     [
-                        ("Auto", "auto"),
-                        ("On", "on"),
-                        ("Off", "off"),
+                        (translate("Auto"), "auto"),
+                        (translate("On"), "on"),
+                        (translate("Off"), "off"),
                     ],
                     value=self._config.ui.live_scan_render,
                     id="live-scan-render",
@@ -413,12 +451,12 @@ class SettingsScreen(Screen):
                     allow_blank=False,
                 )
                 yield Label(
-                    "(redraw viz during scan)",
+                    translate("(redraw viz during scan)"),
                     classes="input-hint",
                 )
 
             with Collapsible(
-                title="Cleanup Settings",
+                title=translate("Cleanup Settings"),
                 collapsed=True,
                 classes="section-fold",
             ):
@@ -426,19 +464,25 @@ class SettingsScreen(Screen):
                 # because this is the last screen before a user goes
                 # looking for things to delete.
                 yield Static(
-                    "  Experimental: rule detection, estimates and undo "
-                    "can be wrong.",
+                    translate(
+                        "  Experimental: rule detection, estimates and undo "
+                        "can be wrong."
+                    ),
                     classes="fold-caveat",
                 )
                 with Horizontal(classes="setting-row"):
-                    yield Label("Show Cleanup mode", classes="setting-label")
+                    yield Label(translate("Show Cleanup mode"), classes="setting-label")
                     yield Switch(value=self._config.ui.show_cleanup, id="show-cleanup")
                 yield Static(
-                    "  Cleanup defaults to plan preview and recoverable "
-                    "Trash/quarantine.",
+                    translate(
+                        "  Cleanup defaults to plan preview and recoverable "
+                        "Trash/quarantine."
+                    ),
                     classes="sysinfo-value",
                 )
-                yield Static("  Declarative rule packs", classes="sysinfo-value")
+                yield Static(
+                    translate("  Declarative rule packs"), classes="sysinfo-value"
+                )
                 risk_order = {
                     RiskLevel.SAFE: 0,
                     RiskLevel.MODERATE: 1,
@@ -460,53 +504,58 @@ class SettingsScreen(Screen):
                             id=f"cleanup-pack-{pack.name}",
                         )
                         yield Label(
-                            f"{len(pack.rules)} rules · {pack.source} · "
-                            f"max {maximum.value}",
+                            translate("{len} rules · {source} · max {value}").format(
+                                len=len(pack.rules),
+                                source=status_label(pack.source),
+                                value=translate(maximum.value),
+                            ),
                             classes="input-hint",
                         )
                 if self._rule_catalog.issues:
                     yield Static(
                         "  "
                         + "; ".join(
-                            f"isolated {issue.path}: {issue.error}"
+                            translate("isolated {path}: {error}").format(
+                                path=issue.path, error=diagnostic(issue.error)
+                            )
                             for issue in self._rule_catalog.issues
                         ),
                         classes="sysinfo-value",
                     )
 
             with Collapsible(
-                title="Monitor Settings",
+                title=translate("Monitor Settings"),
                 collapsed=True,
                 classes="section-fold",
             ):
                 with Horizontal(classes="setting-row"):
-                    yield Label("Default interval", classes="setting-label")
+                    yield Label(translate("Default interval"), classes="setting-label")
                     yield Input(
                         value=format_duration(self._config.monitor.default_interval),
                         id="interval-input",
                         classes="setting-input",
                     )
-                    yield Label("(e.g., 6h, 30m, 1d)", classes="input-hint")
+                    yield Label(translate("(e.g., 6h, 30m, 1d)"), classes="input-hint")
 
                 with Horizontal(classes="setting-row"):
-                    yield Label("Max watch time", classes="setting-label")
+                    yield Label(translate("Max watch time"), classes="setting-label")
                     yield Input(
-                        placeholder="unlimited",
+                        placeholder=translate("unlimited"),
                         id="max-watch-time-input",
                         classes="setting-input",
                     )
                     yield Label(
-                        "(e.g., 2h, 1d; blank = unlimited)",
+                        translate("(e.g., 2h, 1d; blank = unlimited)"),
                         classes="input-hint",
                     )
 
                 with Horizontal(classes="setting-row"):
-                    yield Label("Filesystem events", classes="setting-label")
+                    yield Label(translate("Filesystem events"), classes="setting-label")
                     yield Select(
                         [
-                            ("Auto", "auto"),
-                            ("Require events", "events"),
-                            ("Periodic only", "periodic"),
+                            (translate("Auto"), "auto"),
+                            (translate("Require events"), "events"),
+                            (translate("Periodic only"), "periodic"),
                         ],
                         value=self._config.monitor.event_mode,
                         id="monitor-event-mode",
@@ -518,48 +567,58 @@ class SettingsScreen(Screen):
                     # this the brackets parse as a style tag and the
                     # hint renders as "( extra on Linux)".
                     yield Label(
-                        "([watch] extra on Linux)",
+                        translate("([watch] extra on Linux)"),
                         classes="input-hint",
                         markup=False,
                     )
 
                 with Horizontal(classes="setting-row"):
-                    yield Label("Database soft budget", classes="setting-label")
+                    yield Label(
+                        translate("Database soft budget"), classes="setting-label"
+                    )
                     yield Input(
                         value=(
                             str(self._config.monitor.database_soft_budget)
                             if self._config.monitor.database_soft_budget is not None
                             else ""
                         ),
-                        placeholder="unlimited",
+                        placeholder=translate("unlimited"),
                         id="monitor-soft-budget",
                         classes="setting-input",
                     )
-                    yield Label("(bytes or 2GiB)", classes="input-hint")
+                    yield Label(translate("(bytes or 2GiB)"), classes="input-hint")
 
                 with Horizontal(classes="setting-row"):
-                    yield Label("Database hard budget", classes="setting-label")
+                    yield Label(
+                        translate("Database hard budget"), classes="setting-label"
+                    )
                     yield Input(
                         value=(
                             str(self._config.monitor.database_hard_budget)
                             if self._config.monitor.database_hard_budget is not None
                             else ""
                         ),
-                        placeholder="unlimited",
+                        placeholder=translate("unlimited"),
                         id="monitor-hard-budget",
                         classes="setting-input",
                     )
-                    yield Label("(blocks new snapshots)", classes="input-hint")
+                    yield Label(
+                        translate("(blocks new snapshots)"), classes="input-hint"
+                    )
 
                 with Horizontal(classes="setting-row"):
-                    yield Label("Auto-start TUI session", classes="setting-label")
+                    yield Label(
+                        translate("Auto-start TUI session"), classes="setting-label"
+                    )
                     yield Switch(
                         value=self._config.monitor.auto_start_in_tui,
                         id="monitor-auto-start",
                     )
                 yield Static(
-                    "  Per-monitor paths, schedules, policies, retention, pins, "
-                    "and alerts are managed in Monitor Center (2).",
+                    translate(
+                        "  Per-monitor paths, schedules, policies, retention, pins, "
+                        "and alerts are managed in Monitor Center (2)."
+                    ),
                     classes="sysinfo-value",
                 )
 
@@ -612,23 +671,35 @@ class SettingsScreen(Screen):
         self._system_info = info
 
         self.query_one("#sysinfo-cpus", Static).update(
-            f"  CPUs: {info.available_cpus} available / {info.cpu_count} total"
+            translate("  CPUs: {available_cpus} available / {cpu_count} total").format(
+                available_cpus=info.available_cpus,
+                cpu_count=info.cpu_count,
+            )
         )
 
         if info.memory_total_mb > 0:
             total_str = self._format_memory(info.memory_total_mb)
             avail_str = self._format_memory(info.memory_available_mb)
             self.query_one("#sysinfo-memory", Static).update(
-                f"  Memory: {avail_str} available / {total_str} total"
+                translate("  Memory: {avail_str} available / {total_str} total").format(
+                    avail_str=avail_str,
+                    total_str=total_str,
+                )
             )
         else:
             self.query_one("#sysinfo-memory", Static).update(
-                "  Memory: unavailable"
+                translate("  Memory: unavailable")
             )
 
         load = info.load_average
         self.query_one("#sysinfo-load", Static).update(
-            f"  Load: {load[0]:.2f} (1min) / {load[1]:.2f} (5min) / {load[2]:.2f} (15min)"
+            translate(
+                "  Load: {value} (1min) / {value_} (5min) / {value__} (15min)"
+            ).format(
+                value=f"{load[0]:.2f}",
+                value_=f"{load[1]:.2f}",
+                value__=f"{load[2]:.2f}",
+            )
         )
 
         # Use the shared classifier so this line agrees with the FS-Overview
@@ -637,14 +708,20 @@ class SettingsScreen(Screen):
             info.fs_type, info.is_network_fs, info.is_rotational
         )
         self.query_one("#sysinfo-storage", Static).update(
-            f"  Storage: {info.fs_type} — {label}"
+            translate("  Storage: {fs_type} — {label}").format(
+                fs_type=info.fs_type, label=translate(label)
+            )
         )
 
         self.query_one("#sysinfo-recommendation", Static).update(
-            f"  Recommended workers: {info.recommendation_reason}"
+            translate("  Recommended workers: {recommendation_reason}").format(
+                recommendation_reason=worker_policy_text(info.recommendation_reason),
+            )
         )
         self.query_one("#sysinfo-host", Static).update(
-            f"  Host: {self._describe_allocation(info)}"
+            translate("  Host: {_describe_allocation}").format(
+                _describe_allocation=self._describe_allocation(info),
+            )
         )
 
         # Update hint next to workers input
@@ -661,16 +738,26 @@ class SettingsScreen(Screen):
         """
         allocation = info.allocation
         if allocation is None:
-            return f"{info.available_cpus} CPUs"
+            return translate("{available_cpus} CPUs").format(
+                available_cpus=info.available_cpus
+            )
         if allocation.kind == "allocated":
-            return f"allocated slice, {allocation.available_cpus} CPUs"
+            return translate("allocated slice, {available_cpus} CPUs").format(
+                available_cpus=allocation.available_cpus,
+            )
         if allocation.kind == "shared":
             others = allocation.other_users
             return (
-                "shared login node, "
-                f"{others} other user{'' if others == 1 else 's'}"
+                translate(
+                    "shared login node, {others} other user{value}"
+                ).format(
+                    others=others,
+                    value='' if others == 1 else 's',
+                )
             )
-        return f"dedicated, {allocation.available_cpus} CPUs"
+        return translate("dedicated, {available_cpus} CPUs").format(
+            available_cpus=allocation.available_cpus,
+        )
 
     def _worker_ceiling(self) -> int | None:
         """The most workers this host will accept, or None before detection."""
@@ -688,33 +775,47 @@ class SettingsScreen(Screen):
         if info is None:
             return
         ceiling = self._worker_ceiling()
-        hint = f"(recommended: {info.recommended_workers} · max {ceiling} on this host)"
+        hint = translate(
+            "(recommended: {recommended_workers} · max {ceiling} on this host)"
+        ).format(
+            recommended_workers=info.recommended_workers,
+            ceiling=ceiling,
+        )
         if clamped:
-            hint = f"(clamped to {ceiling}; max {ceiling} on this host)"
+            hint = translate(
+                "(clamped to {ceiling}; max {ceiling_} on this host)"
+            ).format(
+                ceiling=ceiling,
+                ceiling_=ceiling,
+            )
         elif reset:
             hint = (
-                f"(0 or less means auto: {info.recommended_workers} here · "
-                f"max {ceiling} on this host)"
+                translate(
+                    "(0 or less means auto: {recommended_workers} here · max {ceiling} on this host)"
+                ).format(
+                    recommended_workers=info.recommended_workers,
+                    ceiling=ceiling,
+                )
             )
         self.query_one("#workers-hint", Label).update(hint)
 
     def _detect_db_size(self) -> None:
         """Show database file size."""
         import os
-        import humanize
 
         if self._repository is None:
             return
         try:
             size = os.path.getsize(self._repository.path)
             self.query_one("#sysinfo-dbsize", Static).update(
-                "  Database: "
-                f"{humanize.naturalsize(size, binary=True)} "
-                f"({self._repository.path})"
+                translate("  Database: {naturalsize} ({path})").format(
+                    naturalsize=format_size(size, binary=True),
+                    path=self._repository.path,
+                )
             )
         except OSError:
             self.query_one("#sysinfo-dbsize", Static).update(
-                "  Database: not found"
+                translate("  Database: not found")
             )
 
     @staticmethod
@@ -733,9 +834,11 @@ class SettingsScreen(Screen):
             # Most likely a full disk — tell the user their settings
             # didn't persist rather than failing silently.
             self.app.notify(
-                "Couldn't save settings — disk may be full. Changes apply "
-                "for this session only.",
-                title="Settings not saved",
+                translate(
+                    "Couldn't save settings — disk may be full. Changes apply "
+                    "for this session only."
+                ),
+                title=translate("Settings not saved"),
                 severity="warning",
                 timeout=8,
             )
@@ -873,10 +976,12 @@ class SettingsScreen(Screen):
             # enters application mode; there is no supported way to turn
             # tracking on or off under a running app.
             self.app.notify(
-                "Mouse support "
-                f"{'enabled' if event.value else 'disabled'} — "
-                "takes effect the next time DiskTide starts.",
-                title="Mouse support",
+                translate(
+                    "Mouse support {value} — takes effect the next time DiskTide starts."
+                ).format(
+                    value=status_label("enabled" if event.value else "disabled"),
+                ),
+                title=translate("Mouse support"),
                 timeout=5,
             )
 
@@ -895,8 +1000,8 @@ class SettingsScreen(Screen):
                 self._config.monitor.event_mode = previous
                 event.select.value = previous
                 self.app.notify(
-                    str(exc),
-                    title="Filesystem events unavailable",
+                    diagnostic(str(exc)),
+                    title=translate("Filesystem events unavailable"),
                     severity="error",
                 )
         elif event.select.id == "default-viz":

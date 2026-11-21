@@ -14,6 +14,7 @@ from functools import partial
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from disktide.i18n import diagnostic, status_label, translate
 from disktide import APP_NAME, __version__
 from disktide.cleanup.actions import QuarantineExecutor, mutation_capabilities
 from disktide.cleanup.rules import get_rule_catalog
@@ -288,21 +289,30 @@ def render_doctor_report(report: DoctorReport) -> str:
         "disktide doctor",
         "================",
         "",
-        "Application",
-        f"  Version: {application['version']}",
+        translate("Application"),
+        translate("  Version: {value}").format(value=application["version"]),
         f"  Python: {application['python_version']}",
         f"  Textual: {application['textual_version']}",
         f"  Textual Plotext: {application['textual_plotext_version']}",
-        f"  Core install: {application['core_install']}",
+        translate("  Core install: {value}").format(
+            value=diagnostic(application["core_install"])
+        ),
         "",
-        "Platform",
-        f"  OS: {platform_info['system']} {platform_info['release']}",
-        f"  Machine: {platform_info['machine']}",
-        f"  Adapter: {platform_info['adapter']}",
+        translate("Platform"),
+        translate("  OS: {value} {value_}").format(
+            value=platform_info["system"],
+            value_=platform_info["release"],
+        ),
+        translate("  Machine: {value}").format(value=platform_info["machine"]),
+        translate("  Adapter: {value}").format(value=platform_info["adapter"]),
         (
-            f"  CPUs: {platform_info['cpu_available']} available / "
-            f"{platform_info['cpu_total']} total"
-            f" ({_cpu_quota_text(platform_info.get('cgroup_cpu_quota'))})"
+            translate(
+                "  CPUs: {value} available / {value_} total ({_cpu_quota_text})"
+            ).format(
+                value=platform_info["cpu_available"],
+                value_=platform_info["cpu_total"],
+                _cpu_quota_text=_cpu_quota_text(platform_info.get("cgroup_cpu_quota")),
+            )
         ),
         _memory_line(platform_info.get("memory")),
         _scanner_line(platform_info.get("scanner")),
@@ -315,50 +325,65 @@ def render_doctor_report(report: DoctorReport) -> str:
     lines.extend(_render_clipboard_block(payload["clipboard"]))
     lines.extend([
         "",
-        "Application paths",
-        f"  Config: {paths['config']}",
-        f"  Database: {paths['database']}",
-        "  Paths: raw" if not paths["redacted"] else "  Paths: redacted (use --show-paths)",
+        translate("Application paths"),
+        translate("  Config: {value}").format(value=paths['config']),
+        translate("  Database: {value}").format(value=paths['database']),
+        translate("  Paths: raw") if not paths["redacted"] else translate("  Paths: redacted (use --show-paths)"),
         "",
-        "Configuration",
-        f"  [{str(payload['config']['status']).upper()}] {payload['config']['reason']}",
+        translate("Configuration"),
+        f"  [{status_label(str(payload['config']['status']).upper())}] "
+        f"{diagnostic(payload['config']['reason'])}",
         "",
-        "Database",
-        f"  [{str(database['status']).upper()}] {database['reason']}",
+        translate("Database"),
+        f"  [{status_label(str(database['status']).upper())}] {diagnostic(database['reason'])}",
         _schema_line(database),
-        f"  Writable persistence: {database['writable']}",
+        translate("  Writable persistence: {value}").format(value=status_label(database["writable"])),
         _integrity_line(database.get("integrity")),
     ])
     lines.extend(_backup_lines(database.get("backup")))
     lines.extend([
         "",
-        "Storage metrics",
+        translate("Storage metrics"),
     ])
     lines.extend(_render_capability_group(payload["metrics"]))
-    lines.extend(["", "Platform capabilities"])
+    lines.extend(["", translate("Platform capabilities")])
     lines.extend(_render_capability_group(payload["capabilities"]))
-    lines.extend(["", "Optional extras"])
+    lines.extend(["", translate("Optional extras")])
     lines.extend(_render_capability_group(payload["optional_extras"]))
 
     cleanup_rules = payload["cleanup_rules"]
     lines.extend([
         "",
-        "Cleanup rule packs",
+        translate("Cleanup rule packs"),
         (
-            f"  Packs: {cleanup_rules['enabled_pack_count']} enabled / "
-            f"{cleanup_rules['pack_count']} loaded"
+            translate(
+                "  Packs: {value} enabled / {value_} loaded"
+            ).format(
+                value=cleanup_rules['enabled_pack_count'],
+                value_=cleanup_rules['pack_count'],
+            )
         ),
-        f"  Active rules: {cleanup_rules['rule_count']}",
+        translate("  Active rules: {value}").format(value=cleanup_rules['rule_count']),
     ])
     for pack in cleanup_rules["packs"]:
-        state = "ON" if pack["enabled"] else "OFF"
+        state = translate("ON") if pack["enabled"] else translate("OFF")
         lines.append(
-            f"  [{state}] {pack['name']} v{pack['version']} · "
-            f"{pack['rule_count']} rules · {pack['source']}"
+            translate(
+                "  [{state}] {value} v{value_} · {value__} rules · {value___}"
+            ).format(
+                state=state,
+                value=pack["name"],
+                value_=pack["version"],
+                value__=pack["rule_count"],
+                value___=status_label(pack["source"]),
+            )
         )
     for issue in cleanup_rules["issues"]:
         lines.append(
-            f"  [INVALID] {issue['path']}: {issue['error']}"
+            translate("  [INVALID] {value}: {value_}").format(
+                value=issue["path"],
+                value_=diagnostic(issue["error"]),
+            )
         )
 
     cleanup_safety = payload["cleanup_safety"]
@@ -366,32 +391,48 @@ def render_doctor_report(report: DoctorReport) -> str:
     quarantine = cleanup_safety["quarantine_ledger"]
     lines.extend([
         "",
-        "Cleanup mutation safety",
-        f"  Dir-fd verification: {mutation['dir_fd_verification']}",
-        f"  Recoverable move: {mutation['recoverable_move']}",
-        f"  Permanent file: {mutation['permanent_file']}",
-        f"  Permanent directory: {mutation['permanent_directory']}",
-        f"  Quarantine ledgers: {quarantine['status']}",
+        translate("Cleanup mutation safety"),
+        translate("  Dir-fd verification: {value}").format(value=status_label(mutation['dir_fd_verification'])),
+        translate("  Recoverable move: {value}").format(value=diagnostic(mutation['recoverable_move'])),
+        translate("  Permanent file: {value}").format(value=diagnostic(mutation['permanent_file'])),
+        translate("  Permanent directory: {value}").format(value=diagnostic(mutation['permanent_directory'])),
+        translate("  Quarantine ledgers: {value}").format(value=status_label(quarantine['status'])),
     ])
     for item in quarantine["roots"]:
-        state = "OK" if item["ledger_matches"] else "MISMATCH"
+        state = translate("OK") if item["ledger_matches"] else translate("MISMATCH")
         lines.append(
-            f"  [{state}] {item['root']} · {item['manifest_items']} items · "
-            f"{item['manifest_bytes']} bytes"
+            translate("  [{state}] {value} · {value_} items · {value__} bytes").format(
+                state=state,
+                value=item["root"],
+                value_=item["manifest_items"],
+                value__=item["manifest_bytes"],
+            )
         )
     for issue in quarantine["issues"]:
-        lines.append(f"  [CHECK] {issue}")
+        lines.append(translate("  [CHECK] {issue}").format(issue=issue))
 
     policy = payload["scan_policy"]
     lines.extend([
         "",
-        "Default scan policy",
-        f"  One filesystem: {policy['one_file_system']}",
-        f"  Exclude pseudo filesystems: {policy['exclude_pseudo_filesystems']}",
-        f"  Exclude snapshot directories: {policy['exclude_snapshot_dirs']}",
-        f"  Max depth: {policy['max_depth'] if policy['max_depth'] is not None else 'unlimited'}",
-        f"  Symlinks: {policy['symlinks']}",
-        f"  Hardlinks: {policy['hardlinks']}",
+        translate("Default scan policy"),
+        translate("  One filesystem: {value}").format(value=status_label(policy['one_file_system'])),
+        translate(
+            "  Exclude pseudo filesystems: {value}"
+        ).format(
+            value=status_label(policy['exclude_pseudo_filesystems']),
+        ),
+        translate(
+            "  Exclude snapshot directories: {value}"
+        ).format(
+            value=status_label(policy['exclude_snapshot_dirs']),
+        ),
+        translate(
+            "  Max depth: {value}"
+        ).format(
+            value=policy['max_depth'] if policy['max_depth'] is not None else diagnostic("unlimited"),
+        ),
+        translate("  Symlinks: {value}").format(value=diagnostic(policy["symlinks"])),
+        translate("  Hardlinks: {value}").format(value=diagnostic(policy["hardlinks"])),
     ])
     return "\n".join(lines)
 
@@ -606,7 +647,7 @@ def _render_colour_block(colour: object) -> list[str]:
         return []
 
     def _shown(value: object) -> str:
-        return "unset" if not value else str(value)
+        return translate("unset") if not value else str(value)
 
     identity = [
         f"TERM: {_shown(colour.get('term'))}",
@@ -614,25 +655,38 @@ def _render_colour_block(colour: object) -> list[str]:
         f"TEXTUAL_COLOR_SYSTEM: {_shown(colour.get('textual_color_system'))}",
     ]
     if colour.get("multiplexer"):
-        identity.append(f"multiplexer: {colour['multiplexer']}")
-    lines = ["Colour", "  " + " · ".join(identity)]
+        identity.append(
+            translate("multiplexer: {value}").format(value=colour["multiplexer"])
+        )
+    lines = [translate("Colour"), "  " + " · ".join(identity)]
 
     clients = colour.get("tmux_clients")
     if isinstance(clients, list) and clients:
         for index, client in enumerate(clients):
-            features = ",".join(client.get("features") or []) or "none"
-            label = "  tmux clients: " if index == 0 else "                "
-            lines.append(f"{label}{client.get('termname') or 'unknown'}: {features}")
+            features = ",".join(client.get("features") or []) or translate("none")
+            label = translate("  tmux clients: ") if index == 0 else "                "
+            lines.append(
+                f"{label}{client.get('termname') or translate('unknown')}: {features}"
+            )
     elif colour.get("multiplexer") == "tmux":
-        lines.append("  tmux clients: none attached (tmux could not be asked)")
+        lines.append(
+            translate("  tmux clients: none attached (tmux could not be asked)")
+        )
 
     detail = colour.get("detail")
-    depth_line = f"  Depth: {colour.get('depth')} ({colour.get('source')}"
-    depth_line += f": {detail})" if detail else ")"
+    depth_line = translate("  Depth: {get} ({get_}").format(
+        get=colour.get("depth"),
+        get_=status_label(colour.get("source")),
+    )
+    depth_line += f": {diagnostic(detail)})" if detail else ")"
     lines.append(depth_line)
     suggestion = colour.get("suggestion")
     if suggestion:
-        lines.append(f"  Suggestion: {suggestion}")
+        lines.append(
+            translate("  Suggestion: {suggestion}").format(
+                suggestion=diagnostic(suggestion)
+            )
+        )
     return lines
 
 
@@ -704,41 +758,57 @@ def _render_clipboard_block(clipboard: object) -> list[str]:
     environment: list[str] = []
     multiplexer = clipboard.get("multiplexer")
     if multiplexer == "tmux":
-        version = clipboard.get("tmux_version") or "version unknown"
-        setting = clipboard.get("tmux_set_clipboard") or "unknown"
+        version = clipboard.get("tmux_version") or translate("version unknown")
+        setting = clipboard.get("tmux_set_clipboard") or translate("unknown")
         environment.append(f"tmux {version} · set-clipboard {setting}")
     elif multiplexer:
         environment.append(str(multiplexer))
     else:
-        environment.append("no multiplexer")
-    environment.append(f"ssh: {'yes' if clipboard.get('ssh') else 'no'}")
-    environment.append(f"display: {clipboard.get('display') or 'none'}")
-    lines = ["Clipboard", "  " + " · ".join(environment)]
+        environment.append(translate("no multiplexer"))
+    environment.append(
+        f"ssh: {translate('yes') if clipboard.get('ssh') else translate('no')}"
+    )
+    environment.append(
+        translate("display: {value}").format(
+            value=clipboard.get("display") or translate("none"),
+        )
+    )
+    lines = [translate("Clipboard"), "  " + " · ".join(environment)]
 
     routes = clipboard.get("routes")
     if isinstance(routes, list) and routes:
         for index, route in enumerate(routes):
             proof = (
-                "verified by exit status"
+                translate("verified by exit status")
                 if route.get("confirmable")
-                else "cannot be verified"
+                else translate("cannot be verified")
             )
             label = "  y: " if index == 0 else "     "
-            lines.append(f"{label}{route.get('detail')} ({proof})")
+            lines.append(f"{label}{diagnostic(route.get('detail', ''))} ({proof})")
     else:
-        lines.append("  y: no route available")
+        lines.append(translate("  y: no route available"))
 
     tools = clipboard.get("tools")
     if isinstance(tools, dict):
         present = sorted(name for name, found in tools.items() if found)
-        lines.append(f"  Tools: {', '.join(present) if present else 'none installed'}")
+        lines.append(
+            translate("  Tools: {value}").format(
+                value=", ".join(present) if present else diagnostic("none installed"),
+            )
+        )
 
     suggestion = clipboard.get("suggestion")
     if suggestion:
-        lines.append(f"  Suggestion: {suggestion}")
+        lines.append(
+            translate("  Suggestion: {suggestion}").format(
+                suggestion=diagnostic(suggestion)
+            )
+        )
     lines.append(
-        "  Y in the explorer shows the path with mouse reporting off, "
-        "for hand selection."
+        translate(
+            "  Y in the explorer shows the path with mouse reporting off, "
+            "for hand selection."
+        )
     )
     return lines
 
@@ -820,59 +890,85 @@ def _render_terminal_block(terminal: object) -> list[str]:
     reports = terminal.get("pixel_reports") or {}
     winsize = terminal.get("winsize")
 
-    identity = [f"TERM: {terminal.get('term') or 'unset'}"]
+    identity = [f"TERM: {terminal.get('term') or translate('unset')}"]
     if terminal.get("term_program"):
-        identity.append(f"program: {terminal['term_program']}")
+        identity.append(
+            translate("program: {value}").format(value=terminal["term_program"])
+        )
     if terminal.get("multiplexer"):
-        identity.append(f"multiplexer: {terminal['multiplexer']}")
-    identity.append(f"ssh: {'yes' if terminal.get('ssh') else 'no'}")
-    identity.append(f"tty: {'yes' if terminal.get('is_tty') else 'no'}")
+        identity.append(
+            translate("multiplexer: {value}").format(value=terminal["multiplexer"])
+        )
+    identity.append(
+        f"ssh: {translate('yes') if terminal.get('ssh') else translate('no')}"
+    )
+    identity.append(
+        f"tty: {translate('yes') if terminal.get('is_tty') else translate('no')}"
+    )
 
-    lines = ["Terminal", "  " + " · ".join(identity)]
+    lines = [translate("Terminal"), "  " + " · ".join(identity)]
 
     if isinstance(winsize, dict):
-        size = f"  Size: {winsize['cols']}x{winsize['rows']} cells"
+        size = translate("  Size: {value}x{value_} cells").format(
+            value=winsize["cols"],
+            value_=winsize["rows"],
+        )
         if winsize["xpixel"] > 0 and winsize["ypixel"] > 0:
-            size += f", {winsize['xpixel']}x{winsize['ypixel']} px"
+            size += translate(", {value}x{value_} px").format(
+                value=winsize["xpixel"],
+                value_=winsize["ypixel"],
+            )
         lines.append(size)
 
     source = str(aspect.get("source", "default"))
     measured_labels = {
         "ioctl": "TIOCGWINSZ",
-        "in-band": "in-band resize",
+        "in-band": translate("in-band resize"),
         "xtwinops": "XTWINOPS",
     }
     value = float(aspect.get("value", 2.0))
     if source in measured_labels:
-        detail = f"measured: {measured_labels[source]}"
+        detail = translate("measured: {value}").format(value=measured_labels[source])
         cell = aspect.get("cell_px")
         if isinstance(cell, list) and len(cell) == 2:
-            detail += f", {_px(cell[0])}x{_px(cell[1])} px cell"
+            detail += translate(", {_px}x{_px_} px cell").format(
+                _px=_px(cell[0]),
+                _px_=_px(cell[1]),
+            )
     elif source == "env":
-        detail = "set: DISKTIDE_CELL_ASPECT"
+        detail = translate("set: DISKTIDE_CELL_ASPECT")
     elif source == "config":
-        detail = "set: [ui] cell_aspect"
+        detail = translate("set: [ui] cell_aspect")
     else:
-        detail = "assumed; nothing measured it"
-    lines.append(f"  Cell aspect: {value:.2f} ({detail})")
+        detail = translate("assumed; nothing measured it")
+    lines.append(
+        translate("  Cell aspect: {value} ({detail})").format(
+            value=f"{value:.2f}",
+            detail=detail,
+        )
+    )
 
     def _flag(value: object) -> str:
         if value is None:
-            return "not asked"
-        return "yes" if value else "no"
+            return translate("not asked")
+        return translate("yes") if value else translate("no")
 
     lines.append(
-        "  Pixel size reports: "
-        f"TIOCGWINSZ {_flag(reports.get('tiocgwinsz'))} · "
-        f"XTWINOPS 16t {_flag(reports.get('xtwinops_16t'))} · "
-        f"14t {_flag(reports.get('xtwinops_14t'))} · "
-        f"in-band resize (2048) {_flag(reports.get('in_band_resize_2048'))}"
+        translate(
+            "  Pixel size reports: TIOCGWINSZ {_flag} · XTWINOPS 16t {_flag_} · 14t {_flag__} · "
+            "in-band resize (2048) {_flag___}"
+        ).format(
+            _flag=_flag(reports.get("tiocgwinsz")),
+            _flag_=_flag(reports.get("xtwinops_16t")),
+            _flag__=_flag(reports.get("xtwinops_14t")),
+            _flag___=_flag(reports.get("in_band_resize_2048")),
+        )
     )
     if source not in measured_labels and source not in ("env", "config"):
         lines.append(
-            "  Suggestion: set Settings (,) > Cell aspect, or use the "
+            translate("  Suggestion: set Settings (,) > Cell aspect, or use the "
             "command palette (^p) entries \"Cell aspect: rounder/taller\", "
-            "or export DISKTIDE_CELL_ASPECT"
+            "or export DISKTIDE_CELL_ASPECT")
         )
     return lines
 
@@ -898,40 +994,52 @@ def _render_capability_group(items: object) -> list[str]:
         return []
     lines: list[str] = []
     labels = {
-        "logical": "Logical",
-        "allocated": "Allocated",
-        "unique": "Unique",
-        "files": "Files",
-        "mount_enumeration": "Mount enumeration",
-        "block_devices": "Block devices",
-        "storage_medium": "Storage medium",
-        "trash": "Trash/quarantine",
-        "filesystem_events": "Filesystem events",
-        "watch": "Watch",
-        "remote": "Remote",
-        "web": "Web",
-        "export": "Export",
+        "logical": translate("Logical"),
+        "allocated": translate("Allocated"),
+        "unique": translate("Unique"),
+        "files": translate("Files"),
+        "mount_enumeration": translate("Mount enumeration"),
+        "block_devices": translate("Block devices"),
+        "storage_medium": translate("Storage medium"),
+        "trash": translate("Trash/quarantine"),
+        "filesystem_events": translate("Filesystem events"),
+        "watch": translate("Watch"),
+        "remote": translate("Remote"),
+        "web": translate("Web"),
+        "export": translate("Export"),
     }
     for key, value in items.items():
         if not isinstance(value, dict):
             continue
         status = str(value.get("status", "unavailable"))
         marker = {
-            "available": "OK",
-            "degraded": "WARN",
-            "unavailable": "NO",
+            "available": translate("OK"),
+            "degraded": translate("WARN"),
+            "unavailable": translate("NO"),
         }.get(status, "NO")
         label = labels.get(key, key.replace("_", " ").title())
-        lines.append(f"  [{marker}] {label}: {value.get('reason', '')}")
+        lines.append(f"  [{marker}] {label}: {diagnostic(value.get('reason', ''))}")
         version_value = value.get("version")
         if version_value:
-            lines.append(f"       Backend version: {version_value}")
+            lines.append(
+                translate("       Backend version: {version_value}").format(
+                    version_value=version_value,
+                )
+            )
         configured_mode = value.get("configured_mode")
         if configured_mode:
-            lines.append(f"       Configured mode: {configured_mode}")
+            lines.append(
+                translate("       Configured mode: {configured_mode}").format(
+                    configured_mode=status_label(configured_mode),
+                )
+            )
         suggestion = value.get("suggestion")
         if suggestion:
-            lines.append(f"       Suggestion: {suggestion}")
+            lines.append(
+                translate("       Suggestion: {suggestion}").format(
+                    suggestion=diagnostic(suggestion)
+                )
+            )
     return lines
 
 
@@ -1130,32 +1238,42 @@ def _database_report(
 def _schema_line(database: dict[str, object]) -> str:
     """The schema numbers, and where they came from when that is not the file."""
     line = (
-        f"  Schema: {database['schema_version']} / "
-        f"{database['expected_schema_version']}"
+        translate(
+            "  Schema: {value} / {value_}"
+        ).format(
+            value=database['schema_version'],
+            value_=database['expected_schema_version'],
+        )
     )
     if database.get("schema_state") == SCHEMA_NEWER:
-        return f"{line} (newer than this build)"
+        return translate("{line} (newer than this build)").format(line=line)
     source = database.get("schema_source")
     if source not in (None, "database"):
-        return f"{line} ({source})"
+        return f"{line} ({diagnostic(source)})"
     return line
 
 
 def _integrity_line(integrity: object) -> str:
     """One line for the whole-file check, including why it did not run."""
     if not isinstance(integrity, dict):
-        return "  Integrity: unavailable"
+        return translate("  Integrity: unavailable")
     status = integrity.get("status")
-    detail = str(integrity.get("detail") or "")
+    detail = diagnostic(str(integrity.get("detail") or ""))
     if status == "ok":
         seconds = integrity.get("duration_seconds")
-        elapsed = f"{seconds:.1f} s" if isinstance(seconds, (int, float)) else "?"
-        return f"  Integrity: ok ({elapsed})"
+        elapsed = (
+            translate("{seconds} s").format(seconds=f"{seconds:.1f}")
+            if isinstance(seconds, (int, float))
+            else "?"
+        )
+        return translate("  Integrity: ok ({elapsed})").format(elapsed=elapsed)
     if status == "failed":
-        return f"  Integrity: FAILED: {detail}"
+        return translate("  Integrity: FAILED: {detail}").format(detail=detail)
     if status == "skipped":
-        return f"  Integrity: skipped ({detail})"
-    return f"  Integrity: unavailable ({detail or 'no reason given'})"
+        return translate("  Integrity: skipped ({detail})").format(detail=detail)
+    return translate("  Integrity: unavailable ({value})").format(
+        value=detail or diagnostic("no reason given")
+    )
 
 
 def _backup_lines(backup: object) -> list[str]:
@@ -1163,18 +1281,23 @@ def _backup_lines(backup: object) -> list[str]:
     if not isinstance(backup, dict) or not backup.get("present"):
         return []
     size = backup.get("bytes")
-    measured = _mib(size) if isinstance(size, int) else "unknown size"
+    measured = _mib(size) if isinstance(size, int) else translate("unknown size")
     return [
-        f"  Migration backup: {backup.get('path')} ({measured})",
-        "    Safe to delete once this version has been used successfully.",
+        translate("  Migration backup: {get} ({measured})").format(
+            get=backup.get("path"),
+            measured=measured,
+        ),
+        translate("    Safe to delete once this version has been used successfully."),
     ]
 
 
 def _cpu_quota_text(quota: object) -> str:
     """What the control group allows, in the units `--cpus` uses."""
     if not isinstance(quota, (int, float)):
-        return "cgroup cpu quota: none"
-    return f"cgroup cpu quota: {float(quota):.1f} CPUs"
+        return translate("cgroup cpu quota: none")
+    return translate("cgroup cpu quota: {float} CPUs").format(
+        float=f"{float(quota):.1f}"
+    )
 
 
 def _memory_line(memory: object) -> str:
@@ -1184,15 +1307,22 @@ def _memory_line(memory: object) -> str:
     line would tell a 512 MB process about a 256 GB machine.
     """
     if not isinstance(memory, dict):
-        return "  Memory: unavailable"
+        return translate("  Memory: unavailable")
     total = memory.get("total_mb")
     available = memory.get("available_mb")
     if not isinstance(total, int) or not isinstance(available, int):
-        return f"  Memory: unavailable ({memory.get('reason', 'no reason given')})"
-    line = f"  Memory: {available} MB available of {total} MB"
+        return translate("  Memory: unavailable ({get})").format(
+            get=memory.get("reason", "no reason given"),
+        )
+    line = translate("  Memory: {available} MB available of {total} MB").format(
+        available=available,
+        total=total,
+    )
     limit = memory.get("cgroup_limit_mb")
     if isinstance(limit, int):
-        line = f"{line} (cgroup limit: {limit} MB)"
+        line = translate("{line} (cgroup limit: {limit} MB)").format(
+            line=line, limit=limit
+        )
     return line
 
 
@@ -1205,11 +1335,13 @@ def _scanner_line(scanner: object) -> str:
     `DISKTIDE_ACCEL`.
     """
     if not isinstance(scanner, dict):
-        return "  Scanner: unknown"
+        return translate("  Scanner: unknown")
     backend = scanner.get("backend")
     if backend == "native":
-        return "  Scanner: native (_scanfast)"
-    return f"  Scanner: python fallback ({scanner.get('reason', 'no reason given')})"
+        return translate("  Scanner: native (_scanfast)")
+    return translate("  Scanner: python fallback ({get})").format(
+        get=scanner.get("reason", "no reason given"),
+    )
 
 
 def _safe_cpu_quota() -> float | None:

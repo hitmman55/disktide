@@ -18,6 +18,7 @@ from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import Footer, Header, Static, TabbedContent, TabPane, Tree
 
+from disktide.i18n import diagnostic, policy_text, status_label, translate
 from disktide.config import (
     AppConfig,
     ScanOverrides,
@@ -102,9 +103,27 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         # Viz-switch keys are surfaced on the tab labels themselves
         # ("Sunburst [F1]" / "Treemap [F2]" / "Details [F3]") so they don't
         # need to eat space in the footer too.
-        Binding("f1", "switch_viz('sunburst')", "Sunburst", show=False, id="explorer.viz_sunburst"),
-        Binding("f2", "switch_viz('treemap')", "Treemap", show=False, id="explorer.viz_treemap"),
-        Binding("f3", "switch_viz('details')", "Details", show=False, id="explorer.viz_details"),
+        Binding(
+            "f1",
+            "switch_viz('sunburst')",
+            translate("Sunburst"),
+            show=False,
+            id="explorer.viz_sunburst",
+        ),
+        Binding(
+            "f2",
+            "switch_viz('treemap')",
+            translate("Treemap"),
+            show=False,
+            id="explorer.viz_treemap",
+        ),
+        Binding(
+            "f3",
+            "switch_viz('details')",
+            translate("Details"),
+            show=False,
+            id="explorer.viz_details",
+        ),
         # Footer tier.
         #
         # `u` and `i` are not on it. They shared a compact footer group,
@@ -116,33 +135,37 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         # already found the tree, while `s`/`d`/`t`/`y` are the verbs
         # that have to advertise themselves. Both keys still work, and
         # both are listed under "Move around".
-        Binding("u", "go_up", "Up a level", show=False, id="explorer.up"),
-        Binding("i", "go_into", "Into directory", show=False, id="explorer.into"),
-        Binding("s", "cycle_sort", "Sort", show=True, id="explorer.sort"),
-        Binding("d", "toggle_diff", "Diff", show=True, id="explorer.diff"),
+        Binding("u", "go_up", translate("Up a level"), show=False, id="explorer.up"),
+        Binding(
+            "i", "go_into", translate("Into directory"), show=False, id="explorer.into"
+        ),
+        Binding("s", "cycle_sort", translate("Sort"), show=True, id="explorer.sort"),
+        Binding("d", "toggle_diff", translate("Diff"), show=True, id="explorer.diff"),
         # "Metric", not "Bar": the settings screen, the docs, the toast and
         # `METRIC_NAMES` all call it a metric, and `t` changes what every
         # view measures rather than only what the tree's bar is drawn from.
-        Binding("t", "toggle_metric", "Metric", show=True, id="explorer.metric"),
-        Binding("y", "copy_path", "Yank", show=True, id="explorer.yank"),
+        Binding(
+            "t", "toggle_metric", translate("Metric"), show=True, id="explorer.metric"
+        ),
+        Binding("y", "copy_path", translate("Yank"), show=True, id="explorer.yank"),
         # The fallback under `y`: half the copy routes have no reply, so
         # there has to be a way to put the path on screen and let the
         # terminal's own selection take it.
         Binding(
             "Y",
             "show_path",
-            "Show path",
+            translate("Show path"),
             show=False,
             key_display="Y",
             id="explorer.show_path",
         ),
         # `r` is spine: it means rescan/refresh on every screen, so it is in
         # the key map and the palette rather than costing a footer slot.
-        Binding("r", "rescan", "Rescan", show=False, id="explorer.rescan"),
+        Binding("r", "rescan", translate("Rescan"), show=False, id="explorer.rescan"),
         Binding(
             "left_square_bracket",
             "browse_snapshot_pair(-1)",
-            "Newer snapshot pair",
+            translate("Newer snapshot pair"),
             show=False,
             group=SNAPSHOT,
             id="explorer.snapshot_newer",
@@ -150,7 +173,7 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         Binding(
             "right_square_bracket",
             "browse_snapshot_pair(1)",
-            "Older snapshot pair",
+            translate("Older snapshot pair"),
             show=False,
             group=SNAPSHOT,
             id="explorer.snapshot_older",
@@ -160,11 +183,17 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         # `tiles` is the default ring shape and renders byte-identically from
         # aspect 1.5 through 3.0, and `,` is worth more as the settings key.
         # The action itself is still there for the palette and for tests.
-        Binding("g", "cycle_ring_shape", "Ring shape", show=False, id="explorer.ring_shape"),
+        Binding(
+            "g",
+            "cycle_ring_shape",
+            translate("Ring shape"),
+            show=False,
+            id="explorer.ring_shape",
+        ),
         Binding(
             "M",
             "setup_monitor",
-            "Setup monitor",
+            translate("Setup monitor"),
             show=False,
             key_display="M",
             id="explorer.setup_monitor",
@@ -175,11 +204,11 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         # columns at the dialog's 68 cells only while its widest row does,
         # and `tests/test_keymap.py` fails the section the moment it stops.
         Binding(
-            "ctrl+d", "scroll_quarter('down')", "Down a quarter",
+            "ctrl+d", "scroll_quarter('down')", translate("Down a quarter"),
             show=False, id="explorer.scroll_down",
         ),
         Binding(
-            "ctrl+u", "scroll_quarter('up')", "Up a quarter",
+            "ctrl+u", "scroll_quarter('up')", translate("Up a quarter"),
             show=False, id="explorer.scroll_up",
         ),
     ]
@@ -363,7 +392,9 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         yield Breadcrumb(self._scan_path, id="breadcrumb")
         with Horizontal(id="explorer-main"):
             with Vertical(id="tree-panel"):
-                yield Static("Sort: Logical  Metric: Logical", id="sort-indicator")
+                yield Static(
+                    translate("Sort: Logical  Metric: Logical"), id="sort-indicator"
+                )
                 yield SizeTree(id="size-tree")
                 # Progress-only mode swaps this panel; live mode docks a
                 # compact progress surface above the incremental tree.
@@ -374,11 +405,11 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
                     # the footer. The opening bracket is markup-escaped
                     # (\\[) so Textual's Content parser keeps it literal
                     # instead of trying to open a style tag.
-                    with TabPane("Sunburst \\[F1]", id="tab-sunburst"):
+                    with TabPane(translate("Sunburst \\[F1]"), id="tab-sunburst"):
                         yield SunburstView(id="sunburst-view")
-                    with TabPane("Treemap \\[F2]", id="tab-treemap"):
+                    with TabPane(translate("Treemap \\[F2]"), id="tab-treemap"):
                         yield TreemapView(id="treemap-view")
-                    with TabPane("Details \\[F3]", id="tab-details"):
+                    with TabPane(translate("Details \\[F3]"), id="tab-details"):
                         yield InfoPanel(id="info-panel")
         yield Footer()
 
@@ -476,7 +507,7 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         overlay.start(
             run_id=run.run_id,
             phase=run.phase.value,
-            policy=run.policy.summary(),
+            policy=policy_text(run.policy),
         )
         tree_panel = self.query_one("#tree-panel")
         tree_panel.add_class("scanning")
@@ -558,15 +589,24 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
     ) -> None:
         """Log a failed event handler, and tell the user once per run."""
         self.log.error(
-            f"scan event {type(event).__name__} failed: "
-            f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
+            translate(
+                "scan event {__name__} failed: {__name___}: {exc}\n{format_exc}"
+            ).format(
+                __name__=type(event).__name__,
+                __name___=type(exc).__name__,
+                exc=exc,
+                format_exc=traceback.format_exc(),
+            )
         )
         if self._event_error_notified:
             return
         self._event_error_notified = True
         self.notify(
-            f"A scan update could not be drawn ({type(exc).__name__}); "
-            "the scan itself is unaffected.",
+            translate(
+                "A scan update could not be drawn ({__name__}); the scan itself is unaffected."
+            ).format(
+                __name__=type(exc).__name__,
+            ),
             severity="error",
             timeout=8,
         )
@@ -601,16 +641,17 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         if isinstance(event, ScanQueued):
             overlay.update_context(
                 run_id=event.run_id,
-                phase=f"queued #{event.position}",
-                policy=event.reason,
+                phase=translate("queued #{position}").format(position=event.position),
+                policy=diagnostic(event.reason),
             )
         elif isinstance(event, ScanStarted):
             selection = event.worker_selection
-            worker_context = event.policy.summary()
+            worker_context = policy_text(event.policy)
             if selection is not None:
                 worker_context += (
-                    f" · workers {selection.effective_workers} "
-                    f"({selection.mode})"
+                    translate(" · workers {count} ({mode})").format(
+                        count=selection.effective_workers, mode=status_label(selection.mode)
+                    )
                 )
             overlay.update_context(
                 run_id=event.run_id,
@@ -628,7 +669,7 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
                 # stderr to print to, so each becomes a notification the
                 # user has to have seen before the scan gets far.
                 for warning in event.worker_selection.warnings:
-                    self.app.notify(warning, severity="warning", timeout=8)
+                    self.app.notify(diagnostic(warning), severity="warning", timeout=8)
         elif isinstance(event, ScanPhaseChanged):
             overlay.update_context(run_id=event.run_id, phase=event.phase.value)
         elif isinstance(event, ScanProgressUpdated):
@@ -1081,7 +1122,7 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
                 selected_path=selected_path,
             )
         except (VisualizationBlocked, ValueError) as exc:
-            self.app.call_from_thread(self._apply_space_time_context, None, str(exc))
+            self.app.call_from_thread(self._apply_space_time_context, None, diagnostic(str(exc)))
             return
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
@@ -1225,7 +1266,7 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
             self.query_one("#size-tree", SizeTree).reload(self._root or self._current)
             self._update_active_viz(self._current)
         self.app.notify(
-            f"Scan {event.run_id[:8]} cancelled.",
+            translate("Scan {value} cancelled.").format(value=event.run_id[:8]),
             severity="warning",
             timeout=4,
         )
@@ -1286,7 +1327,9 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
             self._update_active_viz(self._current)
 
         self.app.notify(
-            f"Scan failed: {type(exc).__name__}: {exc}",
+            translate("Scan failed: {__name__}: {exc}").format(
+                __name__=type(exc).__name__, exc=exc
+            ),
             severity="error",
             timeout=8,
         )
@@ -1341,28 +1384,52 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         if denied or partial or self._root.has_policy_omissions:
             parts = []
             if denied:
-                parts.append(f"{denied_glyph()} {denied} unreadable")
+                parts.append(
+                    translate("{denied_glyph} {denied} unreadable").format(
+                        denied_glyph=denied_glyph(),
+                        denied=denied,
+                    )
+                )
             if partial:
-                parts.append(f"{partial_glyph()} {partial} partial")
+                parts.append(
+                    translate("{partial_glyph} {partial} partial").format(
+                        partial_glyph=partial_glyph(),
+                        partial=partial,
+                    )
+                )
             if self._root.excluded_subtree_count:
                 parts.append(
-                    f"{self._root.excluded_subtree_count} policy-excluded"
+                    translate("{excluded_subtree_count} policy-excluded").format(
+                        excluded_subtree_count=self._root.excluded_subtree_count,
+                    )
                 )
             if self._root.depth_limited_subtree_count:
                 parts.append(
-                    f"{self._root.depth_limited_subtree_count} depth-limited"
+                    translate("{depth_limited_subtree_count} depth-limited").format(
+                        depth_limited_subtree_count=self._root.depth_limited_subtree_count,
+                    )
                 )
             suffix = "  |  " + ", ".join(parts)
         run_prefix = ""
         if self._active_run is not None:
             run_prefix = (
-                f"Run {self._active_run.run_id[:8]} "
-                f"({self._active_run.status.value})  |  "
+                translate("Run {id} ({status})  |  ").format(
+                    id=self._active_run.run_id[:8], status=status_label(self._active_run.status.value)
+                )
             )
         self.app.sub_title = (
-            f"{run_prefix}{self._root.file_count:,} files, "
-            f"{self._root.dir_count:,} dirs  |  "
-            f"{metric_label}: {total}{suffix}{self._provisional_status_suffix()}"
+            translate(
+                "{run_prefix}{file_count} files, {dir_count} dirs  |  {metric_label}: "
+                "{total}{suffix}{_provisional_status_suffix}"
+            ).format(
+                run_prefix=run_prefix,
+                file_count=f'{self._root.file_count:,}',
+                dir_count=f'{self._root.dir_count:,}',
+                metric_label=metric_label,
+                total=total,
+                suffix=suffix,
+                _provisional_status_suffix=self._provisional_status_suffix(),
+            )
         )
         self._update_tree_indicator()
 
@@ -1377,11 +1444,15 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
                 else "unknown"
             )
             return (
-                f"  |  PROVISIONAL {summary.confidence.value} "
-                f"@ {updated} · base #{summary.base_snapshot_id or '?'}"
+                translate("  |  PROVISIONAL {confidence} @ {updated} · base #{id}").format(
+                    confidence=status_label(summary.confidence.value),
+                    updated=updated, id=summary.base_snapshot_id or "?",
+                )
             )
         if summary.confidence is ProvisionalConfidence.INVALIDATED:
-            return "  |  PROVISIONAL INVALIDATED · awaiting full reconciliation"
+            return translate(
+                "  |  PROVISIONAL INVALIDATED · awaiting full reconciliation"
+            )
         return ""
 
     def _on_monitor_event(self, event: MonitorEvent) -> None:
@@ -1470,10 +1541,15 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         if tree.sort_key == "size":
             sort_label = metric_label
         else:
-            sort_label = self._SORT_DISPLAY.get(tree.sort_key, tree.sort_key)
+            sort_label = translate(self._SORT_DISPLAY.get(tree.sort_key, tree.sort_key))
         self.query_one("#sort-indicator", Static).update(
-            f"Sort: {sort_label}  Metric: {metric_label}  "
-            f"{self._visual_mode_label()}"
+            translate(
+                "Sort: {sort_label}  Metric: {metric_label}  {_visual_mode_label}"
+            ).format(
+                sort_label=sort_label,
+                metric_label=metric_label,
+                _visual_mode_label=self._visual_mode_label(),
+            )
         )
 
     def _visual_mode_label(self) -> str:
@@ -1481,10 +1557,12 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
             # "snapshots", spelled out: `d` reads as "what changed since I
             # last looked", and what it actually draws is the delta between
             # two *saved* snapshots. The live scan is neither of them.
-            return f"Diff snapshots {self._space_time.frame.title}  [ / ] pairs"
+            return translate("Diff snapshots {title}  [ / ] pairs").format(
+                title=self._space_time.frame.title
+            )
         if self._space_time_error:
-            return "Current · diff unavailable"
-        return "Current"
+            return translate("Current · diff unavailable")
+        return translate("Current")
 
     @on(Tree.NodeHighlighted)
     def on_tree_node_highlighted(self, event: Tree.NodeHighlighted[FSNode]) -> None:
@@ -1624,7 +1702,9 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         if self._scan_in_progress:
             # Sizes/counts on a live snapshot are still settling; defer.
             self.app.notify(
-                "Scan still running; open folders after aggregates stabilize.",
+                translate(
+                    "Scan still running; open folders after aggregates stabilize."
+                ),
                 severity="warning",
                 timeout=3,
             )
@@ -1634,7 +1714,9 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
             current = self._root.find(selected.path)
             if current is None:
                 self.app.notify(
-                    "That path was removed; switch to Current or choose another path.",
+                    translate(
+                        "That path was removed; switch to Current or choose another path."
+                    ),
                     severity="warning",
                 )
                 return
@@ -1769,7 +1851,9 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         """Navigate up one directory level, rescanning from parent if at scan root."""
         if self._scan_in_progress:
             self.app.notify(
-                "Scan still running; navigation is available after stabilization.",
+                translate(
+                    "Scan still running; navigation is available after stabilization."
+                ),
                 severity="warning",
                 timeout=3,
             )
@@ -1804,7 +1888,9 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         """
         if self._scan_in_progress:
             self.app.notify(
-                "Scan still running; navigation is available after stabilization.",
+                translate(
+                    "Scan still running; navigation is available after stabilization."
+                ),
                 severity="warning",
                 timeout=3,
             )
@@ -1857,7 +1943,8 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         """
         if self._space_time is None:
             self.app.notify(
-                self._space_time_error or "Take at least two snapshots to use Diff view.",
+                self._space_time_error
+                or translate("Take at least two snapshots to use Diff view."),
                 severity="warning",
                 timeout=5,
             )
@@ -1873,9 +1960,12 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
                 self._request_space_time_context()
                 return
             self.app.notify(
-                f"Diff: saved snapshots {self._space_time.frame.title} — "
-                "values are the target snapshot's, not this scan's. "
-                "[ / ] step through pairs.",
+                translate(
+                    "Diff: saved snapshots {title} — values are the target snapshot's, not this "
+                    "scan's. [ / ] step through pairs."
+                ).format(
+                    title=self._space_time.frame.title,
+                ),
                 timeout=6,
             )
         self._apply_visual_mode()
@@ -1930,13 +2020,15 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         if result.verified:
             self.app.notify(
                 f"{path}\n{result.hint}",
-                title="Copied path",
+                title=translate("Copied path"),
                 timeout=5,
             )
             return
         self.app.notify(
-            f"{path}\nIf nothing pastes, press Y to show it for hand selection.",
-            title="Sent to the terminal clipboard (unverifiable)",
+            translate(
+                "{path}\nIf nothing pastes, press Y to show it for hand selection."
+            ).format(path=path),
+            title=translate("Sent to the terminal clipboard (unverifiable)"),
             severity="information",
             timeout=8,
         )
@@ -1965,7 +2057,7 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         path = Path(node.data.path)
         if not path.is_dir():
             self.app.notify(
-                "Select a directory before setting up a monitor.",
+                translate("Select a directory before setting up a monitor."),
                 severity="warning",
                 timeout=4,
             )
@@ -1994,7 +2086,9 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         label = METRIC_NAMES.get(metric, metric)
         explanation = METRIC_EXPLANATIONS.get(metric, "")
         if metric == "unique" and self._scan_in_progress:
-            explanation = "available after global hardlink accounting completes"
+            explanation = translate(
+                "available after global hardlink accounting completes"
+            )
         self._notify_replacing(f"{label}: {explanation}")
 
     def _notify_replacing(self, message: str, *, timeout: float = 2.0) -> None:
@@ -2035,8 +2129,11 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
                 pass
         bump_render_epoch()
         self.app.notify(
-            f"Cell aspect {value:.2f} (manual) — blank it in Settings (?) "
-            "to return to auto",
+            translate(
+                "Cell aspect {value} (manual) — blank it in Settings (?) to return to auto"
+            ).format(
+                value=f"{value:.2f}",
+            ),
             timeout=4,
         )
 
@@ -2093,7 +2190,10 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
         # picture the toast was explaining. The backticks went with it:
         # `notify` does not read Markdown, so they were printed literally.
         self._notify_replacing(
-            f"Ring shape: {landed} — g cycles {' / '.join(shapes)}"
+            translate("Ring shape: {landed} — g cycles {join}").format(
+                landed=landed,
+                join=" / ".join(shapes),
+            )
         )
 
     def action_scroll_quarter(self, direction: str) -> None:
@@ -2144,8 +2244,8 @@ class ExplorerScreen(RenderEpochRefreshMixin, Screen):
 
         self.app.push_screen(
             ConfirmModal(
-                message=f"Rescan {path}?",
-                title="Rescan",
+                message=translate("Rescan {path}?").format(path=path),
+                title=translate("Rescan"),
                 confirm_keys=("r",),
             ),
             callback=_on_confirm,

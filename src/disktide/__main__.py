@@ -10,7 +10,16 @@ from pathlib import Path
 
 import click
 
+from disktide.i18n import (
+    diagnostic,
+    format_size,
+    policy_text,
+    status_label,
+    translate,
+    worker_policy_text,
+)
 from disktide import __version__
+from disktide.cli_i18n import LocalizedGroup
 from disktide.textsafe import display_text, json_text
 
 
@@ -139,35 +148,35 @@ _TUI_OPTIONS = (
         "-d",
         type=click.IntRange(min=0),
         default=None,
-        help="Maximum scan depth",
+        help=translate("Maximum scan depth"),
     ),
     click.option(
         "--workers",
         "-w",
         type=click.IntRange(min=1),
         default=None,
-        help="Number of scan threads",
+        help=translate("Number of scan threads"),
     ),
     click.option(
         "--one-file-system/--cross-filesystems",
         default=None,
-        help="Stay on the scan root filesystem",
+        help=translate("Stay on the scan root filesystem"),
     ),
     click.option(
         "--exclude-pseudo/--include-pseudo",
         default=None,
-        help="Exclude pseudo-filesystem mountpoints below the scan root",
+        help=translate("Exclude pseudo-filesystem mountpoints below the scan root"),
     ),
     click.option(
         "--exclude-snapshots/--include-snapshots",
         default=None,
-        help="Exclude .snapshot/.zfs storage snapshot directories",
+        help=translate("Exclude .snapshot/.zfs storage snapshot directories"),
     ),
     click.option(
         "--no-mouse",
         is_flag=True,
         default=False,
-        help="Launch the TUI without mouse support (this session only)",
+        help=translate("Launch the TUI without mouse support (this session only)"),
     ),
 )
 
@@ -179,7 +188,7 @@ def _tui_options(command):
     return command
 
 
-class _DiskTideGroup(click.Group):
+class _DiskTideGroup(LocalizedGroup):
     """The top level, which takes a directory as well as a command name.
 
     `disktide ~` is how both the architecture notes and the filesystem
@@ -224,7 +233,7 @@ class _DiskTideGroup(click.Group):
         try:
             return super().invoke(ctx)
         except KeyboardInterrupt:
-            click.echo("Interrupted.", err=True)
+            click.echo(translate("Interrupted."), err=True)
             raise click.exceptions.Exit(130) from None
 
     def _value_taking_options(self, ctx) -> frozenset[str]:
@@ -262,9 +271,13 @@ class _DiskTideGroup(click.Group):
                 # tested so a quoted tilde is not accepted then refused.
                 return [*args[:index], "open", expanded, *args[index + 1 :]]
             raise click.UsageError(
-                f"'{argument}' is neither a command nor a directory. "
-                "Commands: scan, watch, cleanup, compare, monitor, alerts, "
-                "doctor; or give a directory to open it in the explorer."
+                translate(
+                    "'{argument}' is neither a command nor a directory. Commands: scan, watch, "
+                    "cleanup, compare, monitor, alerts, doctor; or give a directory to open it in the "
+                    "explorer."
+                ).format(
+                    argument=argument,
+                )
             )
         return args
 
@@ -289,10 +302,10 @@ def _launch_tui(
         # that a pipe or a redirect can never deliver, which reads as
         # a hang in CI and in `disktide > file`.
         raise click.ClickException(
-            "the TUI needs an interactive terminal, but stdin and stdout "
+            translate("the TUI needs an interactive terminal, but stdin and stdout "
             "are not both a TTY. Use a subcommand for non-interactive "
             "runs, e.g. 'disktide scan PATH' (add --json for "
-            "machine-readable output)."
+            "machine-readable output).")
         )
 
     # First, before every other import in this function:
@@ -346,10 +359,17 @@ def _launch_tui(
         snapshot_repository=repository,
         scan_overrides=scan_overrides,
     )
+    # With its own asyncio.run(), Textual joins the default executor before
+    # returning, which can delay the cleanup below after the terminal closes.
+    # Use the supported explicit loop so this CLI can cancel the services
+    # and close SQLite before its existing hard exit.
+    import asyncio
+
+    loop = asyncio.new_event_loop()
     try:
         # --no-mouse is a session override, not a preference: it never
         # writes back to the config the settings screen owns.
-        app.run(mouse=config.ui.mouse and not no_mouse)
+        app.run(mouse=config.ui.mouse and not no_mouse, loop=loop)
     finally:
         # Quitting is silent: the TUI restores the terminal and the
         # shell prompt is the only acknowledgement a user needs. Run
@@ -367,6 +387,7 @@ def _launch_tui(
         # traceback is even printed. Cancelling turns that into the
         # walker's usual ~10 ms bail.
         _force_teardown(app)
+        loop.close()
         # Both guarded: either fd may have been closed before the
         # process started, which leaves the stream None.
         for stream in (sys.stdout, sys.stderr):
@@ -431,7 +452,7 @@ def cli(
     _soften_stdio_encoding_errors()
     if sys.stdout is None:
         raise click.ClickException(
-            "stdout is closed; there is nowhere to write the report"
+            translate("stdout is closed; there is nowhere to write the report")
         )
     # These five belong to the explorer alone: every subcommand declares its
     # own copies and reads them, so a value parked on the group would be
@@ -447,9 +468,13 @@ def cli(
         ):
             if value is not default:
                 raise click.UsageError(
-                    f"{name} belongs to the explorer, and "
-                    f"'{ctx.invoked_subcommand}' does not read it from here; "
-                    "put it after the subcommand if that command accepts it"
+                    translate(
+                        "{name} belongs to the explorer, and '{invoked_subcommand}' does not read it "
+                        "from here; put it after the subcommand if that command accepts it"
+                    ).format(
+                        name=name,
+                        invoked_subcommand=ctx.invoked_subcommand,
+                    )
                 )
     ctx.ensure_object(dict)
     ctx.obj["max_depth"] = max_depth
@@ -618,17 +643,17 @@ def _force_teardown(app) -> None:
     "--json",
     "json_output",
     is_flag=True,
-    help="Emit a stable machine-readable report",
+    help=translate("Emit a stable machine-readable report"),
 )
 @click.option(
     "--show-paths",
     is_flag=True,
-    help="Include raw application paths instead of redacted XDG paths",
+    help=translate("Include raw application paths instead of redacted XDG paths"),
 )
 @click.option(
     "--check-integrity",
     is_flag=True,
-    help="Run PRAGMA quick_check however large the database is",
+    help=translate("Run PRAGMA quick_check however large the database is"),
 )
 def doctor(json_output: bool, show_paths: bool, check_integrity: bool) -> None:
     """Report installation, database, and platform capabilities."""
@@ -653,7 +678,9 @@ def doctor(json_output: bool, show_paths: bool, check_integrity: bool) -> None:
 
 @cli.command()
 @click.argument("path", default=".", type=click.Path(exists=True))
-@click.option("--snapshot", "-s", is_flag=True, help="Save snapshot to database")
+@click.option(
+    "--snapshot", "-s", is_flag=True, help=translate("Save snapshot to database")
+)
 @click.option(
     "--max-depth",
     "-d",
@@ -673,7 +700,7 @@ def doctor(json_output: bool, show_paths: bool, check_integrity: bool) -> None:
     type=click.Choice(["logical", "allocated", "unique", "files"]),
     default="logical",
     show_default=True,
-    help="Measurement used for totals, sorting, and bars",
+    help=translate("Measurement used for totals, sorting, and bars"),
 )
 @click.option(
     "--one-file-system/--cross-filesystems",
@@ -693,7 +720,9 @@ def doctor(json_output: bool, show_paths: bool, check_integrity: bool) -> None:
     show_default=True,
     help="Exclude .snapshot/.zfs storage snapshot directories",
 )
-@click.option("--json", "json_output", is_flag=True, help="Emit machine-readable JSON")
+@click.option(
+    "--json", "json_output", is_flag=True, help=translate("Emit machine-readable JSON")
+)
 @click.pass_context
 def scan(
     ctx,
@@ -734,7 +763,6 @@ def scan(
         metric_value_or_zero,
     )
     from disktide.services.scan import ScanService
-    import humanize
 
     path = str(Path(path).resolve())
     policy = ScanPolicy(
@@ -790,14 +818,29 @@ def scan(
             if isinstance(event, ScanQueued):
                 self._finish_progress_line()
                 self._status(
-                    f"Scan {event.run_id[:8]} queued at position "
-                    f"{event.position}: {event.reason}"
+                    translate(
+                        "Scan {id} queued at position {position}: {reason}"
+                    ).format(
+                        id=event.run_id[:8],
+                        position=event.position,
+                        reason=diagnostic(event.reason),
+                    )
                 )
             elif isinstance(event, ScanStarted):
-                self._status(f"Scan {event.run_id[:8]} started")
-                self._status(f"  Path: {event.request.path}")
-                self._status(f"  Phase: {event.phase.value}")
-                self._status(f"  Policy: {event.policy.summary()}")
+                self._status(translate("Scan {id} started").format(id=event.run_id[:8]))
+                self._status(
+                    translate("  Path: {path}").format(path=event.request.path)
+                )
+                self._status(
+                    translate("  Phase: {phase}").format(
+                        phase=status_label(event.phase.value)
+                    )
+                )
+                self._status(
+                    translate("  Policy: {summary}").format(
+                        summary=policy_text(event.policy)
+                    )
+                )
                 if event.worker_selection is not None:
                     selection = event.worker_selection
                     requested = (
@@ -806,26 +849,49 @@ def scan(
                         else str(selection.requested_workers)
                     )
                     self._status(
-                        f"  Workers: requested={requested}, "
-                        f"effective={selection.effective_workers}"
+                        translate(
+                            "  Workers: requested={requested}, effective={effective}"
+                        ).format(
+                            requested=status_label(requested),
+                            effective=selection.effective_workers,
+                        )
                     )
-                    self._status(f"  Worker reason: {selection.reason}")
+                    self._status(
+                        translate("  Worker reason: {reason}").format(
+                            reason=worker_policy_text(selection.reason)
+                        )
+                    )
                     # Not routed through `_status`: a caution about the
                     # worker count the user chose is worth printing even
                     # under `--quiet`, and stderr keeps `--json` clean.
                     for warning in selection.warnings:
-                        click.echo(f"Warning: {warning}", err=True)
+                        click.echo(
+                            translate("Warning: {warning}").format(
+                                warning=diagnostic(warning)
+                            ),
+                            err=True,
+                        )
                 if event.resource_slot is not None:
-                    self._status(f"  Resource slot: {event.resource_slot}")
+                    self._status(
+                        translate("  Resource slot: {slot}").format(
+                            slot=event.resource_slot
+                        )
+                    )
             elif isinstance(event, ScanProgressUpdated):
                 if not self.live:
                     return
                 progress = event.progress
                 click.echo(
-                    f"\r  Run {event.run_id[:8]} [{event.phase.value}] "
-                    f"{progress.dirs_scanned:,} dirs, "
-                    f"{progress.files_scanned:,} files, logical "
-                    f"{humanize.naturalsize(progress.logical_bytes, binary=True)}",
+                    translate(
+                        "\r  Run {value} [{value_}] {dirs_scanned} dirs, {files_scanned} files, logical"
+                        " {naturalsize}"
+                    ).format(
+                        value=event.run_id[:8],
+                        value_=status_label(event.phase.value),
+                        dirs_scanned=f"{progress.dirs_scanned:,}",
+                        files_scanned=f"{progress.files_scanned:,}",
+                        naturalsize=format_size(progress.logical_bytes, binary=True),
+                    ),
                     nl=False,
                     err=True,
                 )
@@ -833,19 +899,29 @@ def scan(
             elif isinstance(event, ScanPhaseChanged):
                 if event.phase.value == "finalizing":
                     self._finish_progress_line()
-                    self._status(f"  Phase: {event.phase.value}")
+                    self._status(
+                        translate("  Phase: {phase}").format(
+                            phase=status_label(event.phase.value)
+                        )
+                    )
             elif isinstance(event, ScanCancelled):
                 self._finish_progress_line()
                 click.echo(
-                    f"Scan {event.run_id[:8]} cancelled: {event.reason}",
+                    translate("Scan {value} cancelled: {reason}").format(
+                        value=event.run_id[:8],
+                        reason=diagnostic(event.reason),
+                    ),
                     err=True,
                 )
             elif isinstance(event, ScanFailed):
                 self._finish_progress_line()
                 click.echo(
                     display_text(
-                        f"Scan {event.run_id[:8]} failed: "
-                        f"{event.error_type}: {event.message}"
+                        translate("Scan {id} failed: {type}: {message}").format(
+                            id=event.run_id[:8],
+                            type=event.error_type,
+                            message=diagnostic(event.message),
+                        )
                     ),
                     err=True,
                 )
@@ -888,7 +964,7 @@ def scan(
         root.depth_limited_subtree_count + int(root.depth_limited)
     )
     metric = run.request.metric.value
-    status_label = "partial" if run.partial else "complete"
+    completion_status = "partial" if run.partial else "complete"
     duplicate_links = sum(1 for node in root.walk() if node.is_hardlink_duplicate)
     children = sorted(
         (child for child in root.children if child.is_dir),
@@ -966,47 +1042,112 @@ def scan(
 
     # No leading blank line: the report is the first thing on stdout now
     # that the run narration goes to stderr.
-    click.echo(f"Scan {run.run_id[:8]} {status_label} in {run.duration_seconds:.1f}s")
-    click.echo(f"  Status: {run.status.value}")
+    click.echo(
+        translate("Scan {value} {status_label} in {duration_seconds}s").format(
+            value=run.run_id[:8],
+            status_label=status_label(completion_status),
+            duration_seconds=f"{run.duration_seconds:.1f}",
+        )
+    )
+    click.echo(
+        translate("  Status: {value}").format(value=status_label(run.status.value))
+    )
     metric_name = METRIC_NAMES[metric]
-    click.echo(f"  Metric: {metric_name} — {METRIC_EXPLANATIONS[metric]}")
-    click.echo(f"  Total ({metric_name}): {metric_text(root, metric)}")
-    click.echo(f"  Logical: {metric_text(root, 'logical')}")
-    click.echo(f"  Allocated: {metric_text(root, 'allocated')}")
-    click.echo(f"  Unique on disk: {metric_text(root, 'unique')}")
-    click.echo(f"  Files: {root.file_count:,}")
-    click.echo(f"  Directories: {root.dir_count:,}")
+    click.echo(
+        translate("  Metric: {metric_name} — {value}").format(
+            metric_name=metric_name,
+            value=METRIC_EXPLANATIONS[metric],
+        )
+    )
+    click.echo(
+        translate("  Total ({metric_name}): {metric_text}").format(
+            metric_name=metric_name,
+            metric_text=metric_text(root, metric),
+        )
+    )
+    click.echo(
+        translate("  Logical: {metric_text}").format(
+            metric_text=metric_text(root, "logical")
+        )
+    )
+    click.echo(
+        translate("  Allocated: {metric_text}").format(
+            metric_text=metric_text(root, "allocated")
+        )
+    )
+    click.echo(
+        translate("  Unique on disk: {metric_text}").format(
+            metric_text=metric_text(root, "unique")
+        )
+    )
+    click.echo(
+        translate("  Files: {file_count}").format(file_count=f"{root.file_count:,}")
+    )
+    click.echo(
+        translate("  Directories: {dir_count}").format(dir_count=f"{root.dir_count:,}")
+    )
     if run.worker_selection is not None:
         click.echo(
-            f"  Workers: {run.worker_selection.effective_workers} "
-            f"({run.worker_selection.mode})"
+            translate("  Workers: {effective_workers} ({mode})").format(
+                effective_workers=run.worker_selection.effective_workers,
+                mode=status_label(run.worker_selection.mode),
+            )
         )
     if run.resource_wait_seconds > 0:
-        click.echo(f"  Resource wait: {run.resource_wait_seconds:.3f}s")
+        click.echo(
+            translate("  Resource wait: {resource_wait_seconds}s").format(
+                resource_wait_seconds=f"{run.resource_wait_seconds:.3f}",
+            )
+        )
     if root.scan_policy is not None:
-        click.echo(f"  Policy: {root.scan_policy.summary()}")
+        click.echo(
+            translate("  Policy: {summary}").format(
+                summary=policy_text(root.scan_policy)
+            )
+        )
     for warning in run.capability_warnings:
-        click.echo(f"  Capability warning: {warning}")
+        click.echo(
+            translate("  Capability warning: {warning}").format(
+                warning=diagnostic(warning)
+            )
+        )
     if root.inaccessible_subtree_count:
         click.echo(
-            f"  Coverage: partial ({root.inaccessible_subtree_count:,} "
-            "unreadable entries/subtrees)"
+            translate(
+                "  Coverage: partial ({inaccessible_subtree_count} unreadable entries/subtrees)"
+            ).format(
+                inaccessible_subtree_count=f"{root.inaccessible_subtree_count:,}",
+            )
         )
     if root.vanished_subtree_count:
         click.echo(
-            f"  Changed during scan: {root.vanished_subtree_count:,} "
-            "entries vanished"
+            translate(
+                "  Changed during scan: {vanished_subtree_count} entries vanished"
+            ).format(
+                vanished_subtree_count=f"{root.vanished_subtree_count:,}",
+            )
         )
     if excluded_subtrees or depth_limited_subtrees:
         click.echo(
-            f"  Scoped out: {excluded_subtrees:,} policy-excluded, "
-            f"{depth_limited_subtrees:,} depth-limited"
+            translate(
+                "  Scoped out: {excluded_subtrees} policy-excluded, {depth_limited_subtrees} "
+                "depth-limited"
+            ).format(
+                excluded_subtrees=f"{excluded_subtrees:,}",
+                depth_limited_subtrees=f"{depth_limited_subtrees:,}",
+            )
         )
     if duplicate_links:
-        click.echo(f"  Hardlinks deduplicated in Unique: {duplicate_links:,}")
+        click.echo(
+            translate("  Hardlinks deduplicated in Unique: {duplicate_links}").format(
+                duplicate_links=f"{duplicate_links:,}",
+            )
+        )
 
     # Show top directories
-    click.echo(f"\nTop directories by {metric_name.lower()}:")
+    click.echo(
+        translate("\nTop directories by {lower}:").format(lower=metric_name.lower())
+    )
     for child in children[:15]:
         child_value = metric_value(child, metric)
         pct = (
@@ -1028,17 +1169,28 @@ def scan(
     if snapshot:
         outcome = _save_scan_snapshot(run)
         if outcome["saved"]:
-            click.echo(f"\nSnapshot saved (id={outcome['id']})")
+            click.echo(
+                translate("\nSnapshot saved (id={value})").format(value=outcome["id"])
+            )
         elif outcome["kind"] == "unwritable":
             click.echo(
-                "\nCould not save snapshot: the storage database is "
-                f"unavailable or read-only. {outcome['error']}".rstrip(),
+                translate(
+                    "\nCould not save snapshot: the storage database is unavailable or read-only. "
+                    "{value}"
+                )
+                .format(
+                    value=outcome["error"],
+                )
+                .rstrip(),
                 err=True,
             )
         else:
             click.echo(
-                "\nCould not save snapshot; the scan result is "
-                f"still valid: {outcome['error']}",
+                translate(
+                    "\nCould not save snapshot; the scan result is still valid: {value}"
+                ).format(
+                    value=outcome["error"],
+                ),
                 err=True,
             )
         if not outcome["saved"]:
@@ -1086,13 +1238,15 @@ def _save_scan_snapshot(run) -> dict:
 @click.option(
     "--since",
     metavar="DURATION",
-    help="Compare latest with the newest snapshot at least this old (e.g. 7d)",
+    help=translate(
+        "Compare latest with the newest snapshot at least this old (e.g. 7d)"
+    ),
 )
 @click.option(
     "--raw",
     "raw_diff",
     is_flag=True,
-    help="Show an explicitly untrusted diff when policies are incompatible",
+    help=translate("Show an explicitly untrusted diff when policies are incompatible"),
 )
 @click.option("--limit", default=10, show_default=True, type=click.IntRange(1, 100))
 def compare(
@@ -1117,14 +1271,16 @@ def compare(
 
     if since is not None:
         if len(selectors) != 1:
-            raise click.UsageError("--since requires exactly one PATH argument")
+            raise click.UsageError(
+                translate("--since requires exactly one PATH argument")
+            )
         target_selector = "latest"
         baseline_selector = "previous"
         root_path = str(Path(selectors[0]).expanduser().resolve())
     else:
         if len(selectors) not in {0, 2, 3}:
             raise click.UsageError(
-                "use: disktide compare TARGET BASELINE [PATH]"
+                translate("use: disktide compare TARGET BASELINE [PATH]")
             )
         target_selector = selectors[0] if selectors else "latest"
         baseline_selector = selectors[1] if selectors else "previous"
@@ -1143,7 +1299,7 @@ def compare(
                 seconds = parse_duration(since)
             except (TypeError, ValueError) as exc:
                 raise click.BadParameter(
-                    "expected a duration such as 7d, 12h, or 30m",
+                    translate("expected a duration such as 7d, 12h, or 30m"),
                     param_hint="--since",
                 ) from exc
             if seconds <= 0:
@@ -1152,7 +1308,7 @@ def compare(
                 # exited 1 for the same class of input. The service keeps
                 # its own check -- it has callers that are not this CLI.
                 raise click.BadParameter(
-                    "must be greater than zero", param_hint="--since"
+                    translate("must be greater than zero"), param_hint="--since"
                 )
             result = service.compare_since(
                 timedelta(seconds=seconds),
@@ -1218,7 +1374,7 @@ def _duration_value(value: str, *, param_hint: str) -> int:
         raise click.BadParameter(str(exc), param_hint=param_hint) from exc
     if seconds <= 0:
         raise click.BadParameter(
-            "duration must be greater than zero", param_hint=param_hint
+            translate("duration must be greater than zero"), param_hint=param_hint
         )
     return seconds
 
@@ -1232,7 +1388,7 @@ def _size_value(value: str, *, param_hint: str) -> int:
         raise click.BadParameter(str(exc), param_hint=param_hint) from exc
     if size < 0:
         raise click.BadParameter(
-            "size must be zero or greater", param_hint=param_hint
+            translate("size must be zero or greater"), param_hint=param_hint
         )
     return size
 
@@ -1265,8 +1421,13 @@ def monitor_group() -> None:
 
 
 @monitor_group.command("list")
-@click.option("--all", "include_archived", is_flag=True, help="Include archived monitors")
-@click.option("--json", "json_output", is_flag=True, help="Emit JSON")
+@click.option(
+    "--all",
+    "include_archived",
+    is_flag=True,
+    help=translate("Include archived monitors"),
+)
+@click.option("--json", "json_output", is_flag=True, help=translate("Emit JSON"))
 def monitor_list(include_archived: bool, json_output: bool) -> None:
     """List monitor definitions and runtime state."""
 
@@ -1303,23 +1464,32 @@ def monitor_list(include_archived: bool, json_output: bool) -> None:
             click.echo(_json_dumps(payload, sort_keys=True))
             return
         if not dashboard.monitors:
-            click.echo("No monitor definitions. Use: disktide monitor add PATH")
+            click.echo(
+                translate("No monitor definitions. Use: disktide monitor add PATH")
+            )
             return
         click.echo(
-            "ID  Desired   Activity   Health    Interval  Snaps  Label · Path"
+            translate(
+                "ID  Desired   Activity   Health    Interval  Snaps  Label · Path"
+            )
         )
         for item in dashboard.monitors:
             definition = item.definition
             status = item.status
             click.echo(
-                f"{definition.id:<3} {definition.desired_state.value:<9} "
-                f"{status.activity.value:<10} {status.health.value:<9} "
+                f"{definition.id:<3} {status_label(definition.desired_state.value):<9} "
+                f"{status_label(status.activity.value):<10} {status_label(status.health.value):<9} "
                 f"{format_duration(definition.interval_seconds):<9} "
                 f"{item.snapshot_count:<6} "
                 f"{definition.label} · {definition.root_path}"
             )
         if dashboard.repository_state != "writable":
-            click.echo(f"Repository: {dashboard.repository_state}", err=True)
+            click.echo(
+                translate("Repository: {repository_state}").format(
+                    repository_state=status_label(dashboard.repository_state),
+                ),
+                err=True,
+            )
     finally:
         service.shutdown(wait=False)
         repository.close()
@@ -1330,8 +1500,10 @@ def monitor_list(include_archived: bool, json_output: bool) -> None:
     "path",
     type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
 )
-@click.option("--label", default="", help="Display label")
-@click.option("--interval", default=None, help="Start-to-start cadence (e.g. 6h)")
+@click.option("--label", default="", help=translate("Display label"))
+@click.option(
+    "--interval", default=None, help=translate("Start-to-start cadence (e.g. 6h)")
+)
 @click.option(
     "--metric",
     type=click.Choice(["logical", "allocated", "unique", "files"]),
@@ -1343,7 +1515,9 @@ def monitor_list(include_archived: bool, json_output: bool) -> None:
 @click.option("--exclude-pseudo/--include-pseudo", default=None)
 @click.option("--exclude-snapshots/--include-snapshots", default=None)
 @click.option("--max-depth", type=click.IntRange(min=0), default=None)
-@click.option("--capture-now", is_flag=True, help="Capture the first snapshot now")
+@click.option(
+    "--capture-now", is_flag=True, help=translate("Capture the first snapshot now")
+)
 def monitor_add(
     path: Path,
     label: str,
@@ -1399,21 +1573,36 @@ def monitor_add(
         for existing in service.list_monitors():
             if existing.root_path == root:
                 raise click.ClickException(
-                    f"monitor {existing.id} ({existing.label}) already "
-                    f"watches {root}"
+                    translate("monitor {id} ({label}) already watches {root}").format(
+                        id=existing.id,
+                        label=existing.label,
+                        root=root,
+                    )
                 )
         created = service.create_monitor(definition)
         click.echo(
-            f"Created monitor {created.id}: {created.label} · {created.root_path} "
-            f"(revision {created.revision})"
+            translate(
+                "Created monitor {id}: {label} · {root_path} (revision {revision})"
+            ).format(
+                id=created.id,
+                label=created.label,
+                root_path=created.root_path,
+                revision=created.revision,
+            )
         )
         for warning in warnings:
-            click.echo(f"Warning: {warning}", err=True)
+            click.echo(
+                translate("Warning: {warning}").format(warning=warning), err=True
+            )
         if capture_now:
             result = service.run_monitor_now(created.id)
             if result is not None:
                 if result.snapshot is not None:
-                    click.echo(f"Captured snapshot #{result.snapshot.id}")
+                    click.echo(
+                        translate("Captured snapshot #{id}").format(
+                            id=result.snapshot.id
+                        )
+                    )
                 elif result.run is not None:
                     raise click.ClickException(
                         result.run.error_message or result.run.status.value
@@ -1469,7 +1658,11 @@ def monitor_edit(
     try:
         current = service.get_monitor(identifier)
         if current is None:
-            raise click.ClickException(f"monitor '{identifier}' does not exist")
+            raise click.ClickException(
+                translate("monitor '{identifier}' does not exist").format(
+                    identifier=identifier,
+                )
+            )
         policy = ScanPolicy(
             one_file_system=(
                 current.policy.one_file_system
@@ -1510,11 +1703,16 @@ def monitor_edit(
             edited, expected_revision=current.revision
         )
         click.echo(
-            f"Updated monitor {updated.id}: revision {current.revision} → "
-            f"{updated.revision}"
+            translate("Updated monitor {id}: revision {revision} → {revision_}").format(
+                id=updated.id,
+                revision=current.revision,
+                revision_=updated.revision,
+            )
         )
         for warning in warnings:
-            click.echo(f"Warning: {warning}", err=True)
+            click.echo(
+                translate("Warning: {warning}").format(warning=warning), err=True
+            )
     except click.ClickException:
         raise
     except Exception as exc:
@@ -1532,7 +1730,12 @@ def _monitor_state_command(identifier: str, state: str) -> None:
             if state == "paused"
             else service.resume_monitor(identifier)
         )
-        click.echo(f"Monitor {monitor.id} is {monitor.desired_state.value}")
+        click.echo(
+            translate("Monitor {id} is {value}").format(
+                id=monitor.id,
+                value=status_label(monitor.desired_state.value),
+            )
+        )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     finally:
@@ -1564,11 +1767,13 @@ def monitor_run(identifier: str) -> None:
     try:
         result = service.run_monitor_now(identifier)
         if result is None:
-            click.echo("Run queued in the active host session.")
+            click.echo(translate("Run queued in the active host session."))
             return
         if result.run is None or not result.run.succeeded:
             raise click.ClickException(
-                result.run.error_message if result.run else "run did not start"
+                result.run.error_message
+                if result.run
+                else translate("run did not start")
             )
         root = result.run.root
         metric = result.definition.metric
@@ -1577,15 +1782,27 @@ def monitor_run(identifier: str) -> None:
         snapshot = (
             f"snapshot #{result.snapshot.id}"
             if result.snapshot is not None
-            else "snapshot not persisted"
+            else translate("snapshot not persisted")
         )
         click.echo(
-            f"Run {result.run.run_id[:8]} {result.run.status.value}: "
-            f"{metric_name}: {value}, {snapshot}, "
-            f"{len(result.alerts)} alert event(s)"
+            translate(
+                "Run {value} {value_}: {metric_name}: {value__}, {snapshot}, {len} alert event(s)"
+            ).format(
+                value=result.run.run_id[:8],
+                value_=status_label(result.run.status.value),
+                metric_name=metric_name,
+                value__=value,
+                snapshot=snapshot,
+                len=len(result.alerts),
+            )
         )
         if result.persistence_error:
-            click.echo(f"Warning: {result.persistence_error}", err=True)
+            click.echo(
+                translate("Warning: {persistence_error}").format(
+                    persistence_error=result.persistence_error,
+                ),
+                err=True,
+            )
     except click.ClickException:
         raise
     except Exception as exc:
@@ -1603,23 +1820,35 @@ def monitor_reconcile(identifier: str) -> None:
     try:
         result = service.reconcile_monitor(identifier)
         if result is None:
-            click.echo("Full reconciliation queued in the active host session.")
+            click.echo(
+                translate("Full reconciliation queued in the active host session.")
+            )
             return
         if result.run is None or not result.run.succeeded:
             raise click.ClickException(
-                result.run.error_message if result.run else "reconciliation did not start"
+                result.run.error_message
+                if result.run
+                else translate("reconciliation did not start")
             )
         snapshot = (
             f"snapshot #{result.snapshot.id}"
             if result.snapshot is not None
-            else "snapshot not persisted"
+            else translate("snapshot not persisted")
         )
         click.echo(
-            f"Reconciliation {result.run.run_id[:8]} "
-            f"{result.run.status.value}: {snapshot}"
+            translate("Reconciliation {value} {value_}: {snapshot}").format(
+                value=result.run.run_id[:8],
+                value_=status_label(result.run.status.value),
+                snapshot=snapshot,
+            )
         )
         if result.persistence_error:
-            click.echo(f"Warning: {result.persistence_error}", err=True)
+            click.echo(
+                translate("Warning: {persistence_error}").format(
+                    persistence_error=result.persistence_error,
+                ),
+                err=True,
+            )
     except click.ClickException:
         raise
     except Exception as exc:
@@ -1635,8 +1864,6 @@ def monitor_reconcile(identifier: str) -> None:
 def monitor_status(identifier: str | None, json_output: bool) -> None:
     """Show detailed status for one or all monitors."""
 
-    import humanize
-
     from disktide.config import format_duration
 
     _, repository, service = _monitor_service()
@@ -1647,7 +1874,9 @@ def monitor_status(identifier: str | None, json_output: bool) -> None:
             monitor = service.get_monitor(identifier)
             if monitor is None:
                 raise click.ClickException(
-                    f"monitor '{identifier}' does not exist"
+                    translate("monitor '{identifier}' does not exist").format(
+                        identifier=identifier
+                    )
                 )
             items = [item for item in items if item.definition.id == monitor.id]
         if json_output:
@@ -1744,95 +1973,180 @@ def monitor_status(identifier: str | None, json_output: bool) -> None:
             )
             return
         if not items:
-            click.echo("No monitor definitions.")
+            click.echo(translate("No monitor definitions."))
             return
         for item in items:
             definition = item.definition
             status = item.status
-            click.echo(f"Monitor {definition.id}: {definition.label}")
-            click.echo(f"  Path: {definition.root_path}")
             click.echo(
-                f"  State: {definition.desired_state.value} · "
-                f"{status.activity.value} · {status.health.value}"
+                translate("Monitor {id}: {label}").format(
+                    id=definition.id, label=definition.label
+                )
             )
             click.echo(
-                f"  Schedule: every {format_duration(definition.interval_seconds)}; "
-                f"next {status.next_due_at.isoformat() if status.next_due_at else 'not scheduled'}"
+                translate("  Path: {root_path}").format(root_path=definition.root_path)
             )
             click.echo(
-                f"  Policy: {definition.metric.value}; {definition.policy.summary()}; "
-                f"revision {definition.revision}"
+                translate("  State: {value} · {value_} · {value__}").format(
+                    value=status_label(definition.desired_state.value),
+                    value_=status_label(status.activity.value),
+                    value__=status_label(status.health.value),
+                )
+            )
+            click.echo(
+                translate("  Schedule: every {format_duration}; next {value}").format(
+                    format_duration=format_duration(definition.interval_seconds),
+                    value=status.next_due_at.isoformat()
+                    if status.next_due_at
+                    else translate("not scheduled"),
+                )
+            )
+            click.echo(
+                translate("  Policy: {value}; {summary}; revision {revision}").format(
+                    value=status_label(definition.metric.value),
+                    summary=policy_text(definition.policy),
+                    revision=definition.revision,
+                )
             )
             if status.resource_queue_position:
                 click.echo(
-                    f"  Scan resource: queued #{status.resource_queue_position}; "
-                    f"{status.resource_queue_reason or 'policy constrained'}"
+                    translate(
+                        "  Scan resource: queued #{resource_queue_position}; {value}"
+                    ).format(
+                        resource_queue_position=status.resource_queue_position,
+                        value=status.resource_queue_reason
+                        or translate("policy constrained"),
+                    )
                 )
             else:
                 click.echo(
-                    f"  Scan resource: slot {status.resource_active_slot or 'none'}; "
-                    f"workers {status.effective_workers or 'unknown'}"
+                    translate("  Scan resource: slot {value}; workers {value_}").format(
+                        value=status_label(status.resource_active_slot or "none"),
+                        value_=status_label(status.effective_workers or "unknown"),
+                    )
                 )
             if status.worker_policy_reason:
-                click.echo(f"  Worker policy: {status.worker_policy_reason}")
+                click.echo(
+                    translate("  Worker policy: {worker_policy_reason}").format(
+                        worker_policy_reason=worker_policy_text(status.worker_policy_reason),
+                    )
+                )
             click.echo(
-                f"  History: {item.snapshot_count} snapshot(s), "
-                f"~{humanize.naturalsize(item.database_bytes, binary=True)}"
+                translate(
+                    "  History: {snapshot_count} snapshot(s), ~{naturalsize}"
+                ).format(
+                    snapshot_count=item.snapshot_count,
+                    naturalsize=format_size(item.database_bytes, binary=True),
+                )
             )
             if status.host_id:
-                click.echo(f"  Host: {status.host_type} · {status.host_id}")
+                click.echo(
+                    translate("  Host: {host_type} · {host_id}").format(
+                        host_type=status.host_type,
+                        host_id=status.host_id,
+                    )
+                )
             else:
-                click.echo("  Host: none (enabled does not install a daemon)")
+                click.echo(
+                    translate("  Host: none (enabled does not install a daemon)")
+                )
             click.echo(
-                f"  Watch: {status.watch_mode.value}; "
-                f"{status.event_backend or 'none'} · {status.event_backend_status}; "
-                f"{status.watched_root_count} root(s)"
+                translate(
+                    "  Watch: {value}; {value_} · {event_backend_status}; {watched_root_count} root(s)"
+                ).format(
+                    value=status_label(status.watch_mode.value),
+                    value_=status.event_backend or status_label("none"),
+                    event_backend_status=status_label(status.event_backend_status),
+                    watched_root_count=status.watched_root_count,
+                )
             )
             diagnostics = status.watch_diagnostics
             click.echo(
-                f"  Watch resources: {diagnostics.descriptor_count} descriptor(s) / "
-                f"{diagnostics.descriptor_limit or 'unknown'}; "
-                f"instances {diagnostics.instance_limit or 'unknown'}; "
-                f"queue {diagnostics.queued_event_limit or 'unknown'}"
+                translate(
+                    "  Watch resources: {descriptor_count} descriptor(s) / {value}; instances "
+                    "{value_}; queue {value__}"
+                ).format(
+                    descriptor_count=diagnostics.descriptor_count,
+                    value=diagnostics.descriptor_limit or "unknown",
+                    value_=diagnostics.instance_limit or "unknown",
+                    value__=diagnostics.queued_event_limit or "unknown",
+                )
             )
             click.echo(
-                f"  Registration: {diagnostics.registration_strategy}; "
-                f"{diagnostics.registration_duration_seconds or 0:.4f}s; "
-                f"warning {diagnostics.warning or 'none'}; "
-                f"fallback {diagnostics.fallback_reason or 'none'}"
+                translate(
+                    "  Registration: {registration_strategy}; {value}s; warning {value_}; fallback "
+                    "{value__}"
+                ).format(
+                    registration_strategy=status_label(diagnostics.registration_strategy),
+                    value=f"{diagnostics.registration_duration_seconds or 0:.4f}",
+                    value_=diagnostic(diagnostics.warning) if diagnostics.warning else status_label("none"),
+                    value__=diagnostic(diagnostics.fallback_reason) if diagnostics.fallback_reason else status_label("none"),
+                )
             )
             click.echo(
-                f"  Reconciliation: {status.reconciliation_state.value}; "
-                f"pending {status.pending_dirty_paths}; "
-                f"last event {status.last_event_at.isoformat() if status.last_event_at else 'never'}"
+                translate(
+                    "  Reconciliation: {value}; pending {pending_dirty_paths}; last event {value_}"
+                ).format(
+                    value=status_label(status.reconciliation_state.value),
+                    pending_dirty_paths=status.pending_dirty_paths,
+                    value_=status.last_event_at.isoformat()
+                    if status.last_event_at
+                    else status_label("never"),
+                )
             )
             click.echo(
-                f"  Last local/full: "
-                f"{status.last_local_reconciliation_at.isoformat() if status.last_local_reconciliation_at else 'never'} / "
-                f"{status.last_full_reconciliation_at.isoformat() if status.last_full_reconciliation_at else 'never'}"
+                translate("  Last local/full: {value} / {value_}").format(
+                    value=status.last_local_reconciliation_at.isoformat()
+                    if status.last_local_reconciliation_at
+                    else status_label("never"),
+                    value_=status.last_full_reconciliation_at.isoformat()
+                    if status.last_full_reconciliation_at
+                    else status_label("never"),
+                )
             )
             current = status.provisional
             click.echo(
-                f"  Current state: "
-                f"{'provisional' if current.active else 'canonical'}; "
-                f"base {current.base_snapshot_id or 'none'}; "
-                f"confidence {current.confidence.value}; "
-                f"canonical/current {current.canonical_value} / {current.current_value}"
+                translate(
+                    "  Current state: {value}; base {value_}; confidence {value__}; canonical/current "
+                    "{canonical_value} / {current_value}"
+                ).format(
+                    value=status_label("provisional" if current.active else "canonical"),
+                    value_=current.base_snapshot_id or status_label("none"),
+                    value__=status_label(current.confidence.value),
+                    canonical_value=current.canonical_value,
+                    current_value=current.current_value,
+                )
             )
             if current.invalidation_reason:
                 click.echo(
-                    f"  Current invalidation: {current.invalidation_reason}"
+                    translate("  Current invalidation: {invalidation_reason}").format(
+                        invalidation_reason=diagnostic(current.invalidation_reason),
+                    )
                 )
             click.echo(
-                f"  Recovery: overflow {status.overflow_count}; "
-                f"recovered {status.recovery_count}; "
-                f"next full {status.next_due_at.isoformat() if status.next_due_at else 'not scheduled'}"
+                translate(
+                    "  Recovery: overflow {overflow_count}; recovered {recovery_count}; next full "
+                    "{value}"
+                ).format(
+                    overflow_count=status.overflow_count,
+                    recovery_count=status.recovery_count,
+                    value=status.next_due_at.isoformat()
+                    if status.next_due_at
+                    else translate("not scheduled"),
+                )
             )
             if status.degraded_reason:
-                click.echo(f"  Degraded: {status.degraded_reason}", err=True)
+                click.echo(
+                    translate("  Degraded: {degraded_reason}").format(
+                        degraded_reason=diagnostic(status.degraded_reason),
+                    ),
+                    err=True,
+                )
             if status.last_error or status.blocked_reason:
                 click.echo(
-                    f"  Problem: {status.blocked_reason or status.last_error}",
+                    translate("  Problem: {value}").format(
+                        value=status.blocked_reason or status.last_error
+                    ),
                     err=True,
                 )
     finally:
@@ -1842,20 +2156,28 @@ def monitor_status(identifier: str | None, json_output: bool) -> None:
 
 @monitor_group.command("remove")
 @click.argument("identifier")
-@click.option("--yes", is_flag=True, help="Archive without prompting")
+@click.option("--yes", is_flag=True, help=translate("Archive without prompting"))
 def monitor_remove(identifier: str, yes: bool) -> None:
     """Archive a definition while retaining history, pins, and events."""
     _, repository, service = _monitor_service()
     try:
         monitor = service.get_monitor(identifier)
         if monitor is None:
-            raise click.ClickException(f"monitor '{identifier}' does not exist")
+            raise click.ClickException(
+                translate("monitor '{identifier}' does not exist").format(
+                    identifier=identifier,
+                )
+            )
         if not yes and not click.confirm(
-            f"Archive monitor {monitor.id} and keep its history?"
+            translate("Archive monitor {id} and keep its history?").format(
+                id=monitor.id
+            )
         ):
             return
         archived = service.archive_monitor(monitor.id)
-        click.echo(f"Archived monitor {archived.id}; history retained.")
+        click.echo(
+            translate("Archived monitor {id}; history retained.").format(id=archived.id)
+        )
     finally:
         service.shutdown(wait=False)
         repository.close()
@@ -1869,9 +2191,15 @@ def monitor_pin(snapshot_id: int, label: str) -> None:
     _, repository, service = _monitor_service()
     try:
         if repository.get_snapshot(snapshot_id) is None:
-            raise click.ClickException(f"snapshot {snapshot_id} does not exist")
+            raise click.ClickException(
+                translate("snapshot {snapshot_id} does not exist").format(
+                    snapshot_id=snapshot_id,
+                )
+            )
         service.pin_snapshot(snapshot_id, label=label)
-        click.echo(f"Pinned snapshot #{snapshot_id}")
+        click.echo(
+            translate("Pinned snapshot #{snapshot_id}").format(snapshot_id=snapshot_id)
+        )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     finally:
@@ -1885,9 +2213,17 @@ def monitor_unpin(snapshot_id: int) -> None:
     _, repository, service = _monitor_service()
     try:
         if repository.get_snapshot(snapshot_id) is None:
-            raise click.ClickException(f"snapshot {snapshot_id} does not exist")
+            raise click.ClickException(
+                translate("snapshot {snapshot_id} does not exist").format(
+                    snapshot_id=snapshot_id,
+                )
+            )
         service.unpin_snapshot(snapshot_id)
-        click.echo(f"Unpinned snapshot #{snapshot_id}")
+        click.echo(
+            translate("Unpinned snapshot #{snapshot_id}").format(
+                snapshot_id=snapshot_id
+            )
+        )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     finally:
@@ -1896,7 +2232,9 @@ def monitor_unpin(snapshot_id: int) -> None:
 
 @monitor_group.command("retention")
 @click.argument("identifier")
-@click.option("--apply", "apply_changes", is_flag=True, help="Run maintenance")
+@click.option(
+    "--apply", "apply_changes", is_flag=True, help=translate("Run maintenance")
+)
 def monitor_retention(identifier: str, apply_changes: bool) -> None:
     """Preview or run retention maintenance."""
     _, repository, service = _monitor_service()
@@ -1904,17 +2242,31 @@ def monitor_retention(identifier: str, apply_changes: bool) -> None:
         if apply_changes:
             result = service.run_retention_now(identifier)
             click.echo(
-                f"Retention {result.status}: kept {result.kept}, "
-                f"pruned {result.pruned}, rollups {result.rolled_up}"
+                translate(
+                    "Retention {status}: kept {kept}, pruned {pruned}, rollups {rolled_up}"
+                ).format(
+                    status=status_label(result.status),
+                    kept=result.kept,
+                    pruned=result.pruned,
+                    rolled_up=result.rolled_up,
+                )
             )
         else:
             preview = service.retention_preview(identifier)
             click.echo(
-                f"Keep {len(preview.keep_ids)}, prune {len(preview.prune_ids)}, "
-                f"rollups {len(preview.rollups)}, pinned {len(preview.pinned_ids)}"
+                translate(
+                    "Keep {len}, prune {len_}, rollups {len__}, pinned {len___}"
+                ).format(
+                    len=len(preview.keep_ids),
+                    len_=len(preview.prune_ids),
+                    len__=len(preview.rollups),
+                    len___=len(preview.pinned_ids),
+                )
             )
             if preview.prune_ids:
-                click.echo("  Prune IDs: " + ", ".join(map(str, preview.prune_ids)))
+                click.echo(
+                    translate("  Prune IDs: ") + ", ".join(map(str, preview.prune_ids))
+                )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     finally:
@@ -1964,16 +2316,18 @@ def alerts_list(
                 return
             for event in events:
                 suffix = (
-                    f" · suppressed: {event.suppression_reason}"
+                    translate(" · suppressed: {suppression_reason}").format(
+                        suppression_reason=diagnostic(event.suppression_reason or ""),
+                    )
                     if event.suppressed
                     else ""
                 )
                 click.echo(
-                    f"{event.id}: {event.severity.value} {event.kind.value} · "
-                    f"{event.message}{suffix}"
+                    f"{event.id}: {status_label(event.severity.value)} {status_label(event.kind.value)} · "
+                    f"{diagnostic(event.message)}{suffix}"
                 )
             if not events:
-                click.echo("No alert events.")
+                click.echo(translate("No alert events."))
             return
         rules = service.list_alert_rules(monitor_id)
         if json_output:
@@ -2001,11 +2355,19 @@ def alerts_list(
         for rule in rules:
             state = "enabled" if rule.enabled else "disabled"
             click.echo(
-                f"{rule.id}: monitor {rule.monitor_id} · {rule.kind.value} · "
-                f"{rule.path} · threshold {rule.threshold:g} · {state}"
+                translate(
+                    "{id}: monitor {monitor_id} · {value} · {path} · threshold {threshold} · {state}"
+                ).format(
+                    id=rule.id,
+                    monitor_id=rule.monitor_id,
+                    value=status_label(rule.kind.value),
+                    path=rule.path,
+                    threshold=f"{rule.threshold:g}",
+                    state=status_label(state),
+                )
             )
         if not rules:
-            click.echo("No alert rules.")
+            click.echo(translate("No alert rules."))
     finally:
         repository.close()
 
@@ -2013,13 +2375,24 @@ def alerts_list(
 @alerts_group.command("add")
 @click.argument("monitor_id", type=int)
 @click.argument("path", required=False)
-@click.option("--size", "absolute_size", default=None, help="Absolute size threshold")
-@click.option("--growth", default=None, help="Absolute growth threshold")
-@click.option("--percent", type=float, default=None, help="Percentage growth threshold")
-@click.option("--free-space", default=None, help="Trigger at or below free bytes")
-@click.option("--inode-free", type=float, default=None, help="Trigger at or below free inodes")
-@click.option("--new-large", default=None, help="New item threshold")
-@click.option("--window", default=None, help="Growth comparison window")
+@click.option(
+    "--size", "absolute_size", default=None, help=translate("Absolute size threshold")
+)
+@click.option("--growth", default=None, help=translate("Absolute growth threshold"))
+@click.option(
+    "--percent", type=float, default=None, help=translate("Percentage growth threshold")
+)
+@click.option(
+    "--free-space", default=None, help=translate("Trigger at or below free bytes")
+)
+@click.option(
+    "--inode-free",
+    type=float,
+    default=None,
+    help=translate("Trigger at or below free inodes"),
+)
+@click.option("--new-large", default=None, help=translate("New item threshold"))
+@click.option("--window", default=None, help=translate("Growth comparison window"))
 @click.option(
     "--metric",
     type=click.Choice(["logical", "allocated", "unique", "files"]),
@@ -2053,7 +2426,11 @@ def alerts_add(
     try:
         monitor = service.get_monitor(monitor_id)
         if monitor is None:
-            raise click.ClickException(f"monitor {monitor_id} does not exist")
+            raise click.ClickException(
+                translate("monitor {monitor_id} does not exist").format(
+                    monitor_id=monitor_id,
+                )
+            )
         choices = [
             absolute_size is not None,
             growth is not None,
@@ -2064,8 +2441,10 @@ def alerts_add(
         ]
         if sum(choices) != 1:
             raise click.UsageError(
-                "choose exactly one of --size/--growth/--percent/"
-                "--free-space/--inode-free/--new-large"
+                translate(
+                    "choose exactly one of --size/--growth/--percent/"
+                    "--free-space/--inode-free/--new-large"
+                )
             )
         if absolute_size is not None:
             kind = AlertKind.ABSOLUTE_SIZE
@@ -2113,7 +2492,12 @@ def alerts_add(
                 ),
             )
         )
-        click.echo(f"Created alert rule {rule.id} for monitor {monitor_id}")
+        click.echo(
+            translate("Created alert rule {id} for monitor {monitor_id}").format(
+                id=rule.id,
+                monitor_id=monitor_id,
+            )
+        )
     except (click.ClickException, click.UsageError):
         raise
     except Exception as exc:
@@ -2157,7 +2541,11 @@ def alerts_edit(
     try:
         rule = repository.get_alert_rule(rule_id)
         if rule is None:
-            raise click.ClickException(f"alert rule {rule_id} does not exist")
+            raise click.ClickException(
+                translate("alert rule {rule_id} does not exist").format(
+                    rule_id=rule_id,
+                )
+            )
         parsed_threshold = rule.threshold
         if threshold is not None:
             # The rule already on record says which of the three thresholds
@@ -2199,7 +2587,7 @@ def alerts_edit(
                 ),
             )
         )
-        click.echo(f"Updated alert rule {updated.id}")
+        click.echo(translate("Updated alert rule {id}").format(id=updated.id))
     except click.ClickException:
         raise
     except Exception as exc:
@@ -2212,7 +2600,12 @@ def _alerts_enabled_command(rule_id: int, enabled: bool) -> None:
     _, repository, service = _monitor_service()
     try:
         service.set_alert_rule_enabled(rule_id, enabled)
-        click.echo(f"Alert rule {rule_id} {'enabled' if enabled else 'disabled'}")
+        click.echo(
+            translate("Alert rule {rule_id} {value}").format(
+                rule_id=rule_id,
+                value="enabled" if enabled else "disabled",
+            )
+        )
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     finally:
@@ -2240,7 +2633,7 @@ def alerts_remove(rule_id: int) -> None:
     _, repository, service = _monitor_service()
     try:
         service.remove_alert_rule(rule_id)
-        click.echo(f"Removed alert rule {rule_id}")
+        click.echo(translate("Removed alert rule {rule_id}").format(rule_id=rule_id))
     except Exception as exc:
         raise click.ClickException(str(exc)) from exc
     finally:
@@ -2265,7 +2658,11 @@ def alerts_check(monitor_id: int | None, json_output: bool) -> None:
             else service.list_monitors()
         )
         if any(item is None for item in monitors):
-            raise click.ClickException(f"monitor {monitor_id} does not exist")
+            raise click.ClickException(
+                translate("monitor {monitor_id} does not exist").format(
+                    monitor_id=monitor_id,
+                )
+            )
         events = []
         for monitor in monitors:
             assert monitor is not None and monitor.id is not None
@@ -2292,9 +2689,15 @@ def alerts_check(monitor_id: int | None, json_output: bool) -> None:
         else:
             for event in events:
                 prefix = "SUPPRESSED" if event.suppressed else "TRIGGERED"
-                click.echo(f"{prefix}: rule {event.rule_id}: {event.message}")
+                click.echo(
+                    translate("{prefix}: rule {rule_id}: {message}").format(
+                        prefix=status_label(prefix),
+                        rule_id=event.rule_id,
+                        message=diagnostic(event.message),
+                    )
+                )
             if not events:
-                click.echo("No alerts triggered.")
+                click.echo(translate("No alerts triggered."))
         if any(not event.suppressed for event in events):
             raise click.exceptions.Exit(2)
         if events:
@@ -2309,26 +2712,37 @@ def alerts_check(monitor_id: int | None, json_output: bool) -> None:
     required=False,
     type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
 )
-@click.option("--monitor", "monitor_identifier", default=None, help="Host one saved monitor")
-@click.option("--all", "watch_all", is_flag=True, help="Host all enabled monitors")
-@click.option("--interval", "-i", default=None, help="Transient scan interval")
-@click.option("--max-time", "-t", default=None, help="Maximum foreground host time")
+@click.option(
+    "--monitor",
+    "monitor_identifier",
+    default=None,
+    help=translate("Host one saved monitor"),
+)
+@click.option(
+    "--all", "watch_all", is_flag=True, help=translate("Host all enabled monitors")
+)
+@click.option(
+    "--interval", "-i", default=None, help=translate("Transient scan interval")
+)
+@click.option(
+    "--max-time", "-t", default=None, help=translate("Maximum foreground host time")
+)
 @click.option(
     "--workers",
     "-w",
     type=click.IntRange(min=1),
     default=None,
-    help="Transient scan workers",
+    help=translate("Transient scan workers"),
 )
 @click.option(
     "--events",
     is_flag=True,
-    help="Require optional native filesystem-event acceleration",
+    help=translate("Require optional native filesystem-event acceleration"),
 )
 @click.option(
     "--periodic-only",
     is_flag=True,
-    help="Disable filesystem events for this foreground host",
+    help=translate("Disable filesystem events for this foreground host"),
 )
 @click.pass_context
 def watch(
@@ -2347,7 +2761,6 @@ def watch(
     "watch PATH" is transient and does not create a saved definition.
     "watch --monitor ID" and "watch --all" host persisted definitions.
     """
-    import humanize
 
     from disktide.config import format_duration
     from disktide.domain.metrics import MetricId
@@ -2356,16 +2769,22 @@ def watch(
     from disktide.services.monitor import MonitorEventKind
 
     if watch_all and monitor_identifier is not None:
-        raise click.UsageError("--all and --monitor are mutually exclusive")
+        raise click.UsageError(translate("--all and --monitor are mutually exclusive"))
     if events and periodic_only:
-        raise click.UsageError("--events and --periodic-only are mutually exclusive")
+        raise click.UsageError(
+            translate("--events and --periodic-only are mutually exclusive")
+        )
     if (watch_all or monitor_identifier is not None) and path is not None:
-        raise click.UsageError("PATH cannot be combined with --all or --monitor")
+        raise click.UsageError(
+            translate("PATH cannot be combined with --all or --monitor")
+        )
     if (watch_all or monitor_identifier is not None) and (
         interval is not None or workers is not None
     ):
         raise click.UsageError(
-            "saved monitors use their persisted interval/workers; edit the definition instead"
+            translate(
+                "saved monitors use their persisted interval/workers; edit the definition instead"
+            )
         )
 
     requested_mode = "events" if events else "periodic" if periodic_only else None
@@ -2379,19 +2798,33 @@ def watch(
     def report(event) -> None:
         stamp = event.timestamp.astimezone().strftime("%H:%M:%S")
         if event.kind is MonitorEventKind.RUN_STARTED:
-            click.echo(f"[{stamp}] {event.message}")
+            click.echo(f"[{stamp}] {diagnostic(event.message)}")
         elif event.kind is MonitorEventKind.SNAPSHOT_SAVED:
-            click.echo(f"[{stamp}] {event.message}")
+            click.echo(f"[{stamp}] {diagnostic(event.message)}")
         elif event.kind is MonitorEventKind.ALERT_TRIGGERED:
-            click.echo(f"[{stamp}] ALERT: {event.message}", err=True)
+            click.echo(
+                translate("[{stamp}] ALERT: {message}").format(
+                    stamp=stamp, message=diagnostic(event.message)
+                ),
+                err=True,
+            )
         elif event.kind is MonitorEventKind.RETENTION_COMPLETED:
-            click.echo(f"[{stamp}] {event.message}")
+            click.echo(f"[{stamp}] {diagnostic(event.message)}")
         elif event.kind is MonitorEventKind.RUN_FINISHED:
-            click.echo(f"[{stamp}] {event.message}")
+            click.echo(f"[{stamp}] {diagnostic(event.message)}")
         elif event.kind is MonitorEventKind.WATCH_CHANGED:
-            click.echo(f"[{stamp}] watch: {event.message}")
+            click.echo(
+                translate("[{stamp}] watch: {message}").format(
+                    stamp=stamp, message=diagnostic(event.message)
+                )
+            )
         elif event.kind is MonitorEventKind.RECONCILIATION_FINISHED:
-            click.echo(f"[{stamp}] reconcile: {event.message}")
+            click.echo(
+                translate("[{stamp}] reconcile: {message}").format(
+                    stamp=stamp,
+                    message=diagnostic(event.message),
+                )
+            )
 
     service.subscribe(report)
     try:
@@ -2399,14 +2832,19 @@ def watch(
             service.set_event_mode("events")
         backend = service.event_backend_info()
         if service.event_mode.value == "periodic":
-            click.echo("Watch mode: periodic-only")
+            click.echo(translate("Watch mode: periodic-only"))
         elif backend.available:
             click.echo(
-                f"Watch mode: event-assisted ({backend.name} {backend.version or 'unknown'})"
+                translate("Watch mode: event-assisted ({name} {value})").format(
+                    name=backend.name,
+                    value=backend.version or "unknown",
+                )
             )
         else:
             click.echo(
-                f"Watch mode: periodic fallback ({backend.reason})",
+                translate("Watch mode: periodic fallback ({reason})").format(
+                    reason=backend.reason
+                ),
                 err=True,
             )
         if watch_all or monitor_identifier is not None:
@@ -2415,11 +2853,20 @@ def watch(
                 monitor = service.get_monitor(monitor_identifier)
                 if monitor is None or monitor.id is None:
                     raise click.ClickException(
-                        f"monitor '{monitor_identifier}' does not exist"
+                        translate(
+                            "monitor '{monitor_identifier}' does not exist"
+                        ).format(
+                            monitor_identifier=monitor_identifier,
+                        )
                     )
                 monitor_ids = {monitor.id}
                 click.echo(
-                    f"Hosting monitor {monitor.id} ({monitor.root_path}) in the foreground"
+                    translate(
+                        "Hosting monitor {id} ({root_path}) in the foreground"
+                    ).format(
+                        id=monitor.id,
+                        root_path=monitor.root_path,
+                    )
                 )
             else:
                 enabled = [
@@ -2428,14 +2875,20 @@ def watch(
                     if item.desired_state.value == "enabled"
                 ]
                 if not enabled:
-                    raise click.ClickException("no enabled monitors to host")
-                click.echo(f"Hosting {len(enabled)} enabled monitor(s) in the foreground")
-            click.echo("No daemon is installed; Ctrl+C stops this host.")
+                    raise click.ClickException(translate("no enabled monitors to host"))
+                click.echo(
+                    translate(
+                        "Hosting {len} enabled monitor(s) in the foreground"
+                    ).format(
+                        len=len(enabled),
+                    )
+                )
+            click.echo(translate("No daemon is installed; Ctrl+C stops this host."))
             service.start_session(monitor_ids, host_type="cli")
             started = time.monotonic()
             while service.session_running:
                 if max_seconds is not None and time.monotonic() - started >= max_seconds:
-                    click.echo("Max watch time reached. Stopping.")
+                    click.echo(translate("Max watch time reached. Stopping."))
                     break
                 time.sleep(0.2)
             return
@@ -2462,11 +2915,19 @@ def watch(
             workers=workers if workers is not None else config.scan.workers,
         )
         click.echo(
-            f"Watching {transient_path} every {format_duration(seconds)} "
-            "(transient; Ctrl+C to stop)"
+            translate(
+                "Watching {transient_path} every {format_duration} (transient; Ctrl+C to stop)"
+            ).format(
+                transient_path=transient_path,
+                format_duration=format_duration(seconds),
+            )
         )
         if max_seconds is not None:
-            click.echo(f"  Max watch time: {format_duration(max_seconds)}")
+            click.echo(
+                translate("  Max watch time: {format_duration}").format(
+                    format_duration=format_duration(max_seconds),
+                )
+            )
         results = service.watch_transient(
             definition,
             max_seconds=max_seconds,
@@ -2474,13 +2935,15 @@ def watch(
         for result in results[-1:]:
             if result.run and result.run.root:
                 click.echo(
-                    f"Last run: {humanize.naturalsize(result.run.root.size, binary=True)}, "
-                    f"{result.run.root.file_count:,} files"
+                    translate("Last run: {naturalsize}, {file_count} files").format(
+                        naturalsize=format_size(result.run.root.size, binary=True),
+                        file_count=f"{result.run.root.file_count:,}",
+                    )
                 )
     except KeyboardInterrupt:
         # 128 + SIGINT. A caller has to be able to tell "the user pressed
         # Ctrl-C" apart from "the host reached --max-time and returned".
-        click.echo("\nStopped watching.", err=True)
+        click.echo(translate("\nStopped watching."), err=True)
         ctx.exit(130)
     except click.ClickException:
         raise
@@ -2494,7 +2957,7 @@ def watch(
 _HELP_FLAGS = frozenset({"--help", "-h"})
 
 
-class _DefaultCommandGroup(click.Group):
+class _DefaultCommandGroup(LocalizedGroup):
     """A group whose bare arguments fall through to one default subcommand.
 
     ``disktide cleanup /srv`` has to keep working now that ``cleanup`` is
@@ -2601,11 +3064,18 @@ def cleanup() -> None:
     help="Number of scan threads",
 )
 @click.option(
-    "--apply", "apply_safe", is_flag=True, help="Move targets to Trash/quarantine"
+    "--apply",
+    "apply_safe",
+    is_flag=True,
+    help=translate("Move targets to Trash/quarantine"),
 )
-@click.option("--plan", "plan_id", help="Load an existing cleanup plan")
-@click.option("--permanent", is_flag=True, help="Use the separate permanent-delete flow")
-@click.option("--confirm", help="Exact permanent-delete confirmation token")
+@click.option("--plan", "plan_id", help=translate("Load an existing cleanup plan"))
+@click.option(
+    "--permanent",
+    is_flag=True,
+    help=translate("Use the separate permanent-delete flow"),
+)
+@click.option("--confirm", help=translate("Exact permanent-delete confirmation token"))
 @click.option("--json", "json_output", is_flag=True, help="Emit machine-readable JSON")
 def cleanup_plan(
     path: str | None,
@@ -2622,8 +3092,6 @@ def cleanup_plan(
     is touched.
     """
 
-    import humanize
-
     from disktide.cleanup.detector import detect_targets
     from disktide.domain.cleanup import CleanupActionKind, cleanup_plan_to_dict
     from disktide.domain.metrics import MetricId
@@ -2632,7 +3100,9 @@ def cleanup_plan(
     from disktide.services.scan import ScanService
 
     if apply_safe and permanent:
-        raise click.UsageError("--apply and --permanent are mutually exclusive")
+        raise click.UsageError(
+            translate("--apply and --permanent are mutually exclusive")
+        )
 
     config, rule_directory, catalog = _cleanup_catalog()
     with _cleanup_session(config, rule_directory) as (_, service):
@@ -2642,19 +3112,30 @@ def cleanup_plan(
                 requested_root = str(Path(path).expanduser().resolve())
                 if requested_root != plan.scan_root:
                     raise click.UsageError(
-                        f"PATH does not match plan root {plan.scan_root}"
+                        translate("PATH does not match plan root {scan_root}").format(
+                            scan_root=plan.scan_root,
+                        )
                     )
         else:
             path_object = Path(path or ".").expanduser()
             if not path_object.exists():
-                raise click.BadParameter("Path does not exist", param_hint="PATH")
+                raise click.BadParameter(
+                    translate("Path does not exist"), param_hint="PATH"
+                )
             if not path_object.is_dir():
-                raise click.BadParameter("Not a directory", param_hint="PATH")
+                raise click.BadParameter(
+                    translate("Not a directory"), param_hint="PATH"
+                )
             scan_root = str(path_object.resolve())
             # Status, not result: a --json caller must get JSON alone on
             # stdout, and a human redirecting the report does not want it
             # either.
-            click.echo(f"Scanning {scan_root} for cleanup targets...", err=True)
+            click.echo(
+                translate("Scanning {scan_root} for cleanup targets...").format(
+                    scan_root=scan_root
+                ),
+                err=True,
+            )
             request = ScanRequest(
                 path=scan_root,
                 metric=MetricId.LOGICAL,
@@ -2674,14 +3155,21 @@ def cleanup_plan(
             except ScanRequestError as exc:
                 raise click.BadParameter(str(exc), param_hint="PATH") from exc
             if scan_run.status is ScanStatus.CANCELLED:
-                raise click.ClickException("Cleanup scan was cancelled")
+                raise click.ClickException(translate("Cleanup scan was cancelled"))
             if scan_run.status is ScanStatus.FAILED or scan_run.root is None:
-                detail = scan_run.error_message or "unknown scan failure"
-                raise click.ClickException(f"Cleanup scan failed: {detail}")
+                detail = scan_run.error_message or translate("unknown scan failure")
+                raise click.ClickException(
+                    translate("Cleanup scan failed: {detail}").format(
+                        detail=diagnostic(detail)
+                    )
+                )
             targets = detect_targets(scan_run.root, rules=list(catalog.rules))
             for issue in catalog.issues:
                 click.echo(
-                    f"Rule pack isolated ({issue.path}): {issue.error}",
+                    translate("Rule pack isolated ({path}): {error}").format(
+                        path=issue.path,
+                        error=issue.error,
+                    ),
                     err=True,
                 )
             if not targets:
@@ -2698,7 +3186,7 @@ def cleanup_plan(
                         )
                     )
                 else:
-                    click.echo("No cleanup targets found.")
+                    click.echo(translate("No cleanup targets found."))
                 return
             requested = (
                 CleanupActionKind.PERMANENT
@@ -2723,12 +3211,16 @@ def cleanup_plan(
             click.echo(_json_dumps(cleanup_plan_to_dict(plan)))
             return
         if not json_output:
-            _render_cleanup_plan(plan, humanize)
+            _render_cleanup_plan(plan)
         if not apply_safe and not permanent:
             if not json_output:
                 click.echo(
-                    f"Preview only; no filesystem changes made. Apply with: "
-                    f"disktide cleanup --plan {plan.id} --apply"
+                    translate(
+                        "Preview only; no filesystem changes made. Apply with: disktide cleanup --plan"
+                        " {id} --apply"
+                    ).format(
+                        id=plan.id,
+                    )
                 )
             return
 
@@ -2736,10 +3228,11 @@ def cleanup_plan(
             token = service.permanent_confirmation(plan.id)
             if confirm is None:
                 click.echo(
-                    "PERMANENT DELETE bypasses Trash and cannot be undone.", err=True
+                    translate("PERMANENT DELETE bypasses Trash and cannot be undone."),
+                    err=True,
                 )
                 confirm = click.prompt(
-                    f'Type "{token}" to continue',
+                    translate('Type "{token}" to continue').format(token=token),
                     default="",
                     show_default=False,
                 )
@@ -2755,25 +3248,44 @@ def cleanup_plan(
             click.echo(_json_dumps(cleanup_plan_to_dict(result.plan)))
             return
         click.echo(
-            f"Plan {result.plan.id}: {result.plan.status.value}; "
-            f"{result.plan.succeeded_count} succeeded, "
-            f"{result.plan.skipped_count} skipped, "
-            f"{result.plan.failed_count} failed."
+            translate(
+                "Plan {id}: {value}; {succeeded_count} succeeded, {skipped_count} skipped, "
+                "{failed_count} failed."
+            ).format(
+                id=result.plan.id,
+                value=status_label(result.plan.status.value),
+                succeeded_count=result.plan.succeeded_count,
+                skipped_count=result.plan.skipped_count,
+                failed_count=result.plan.failed_count,
+            )
         )
         click.echo(
-            "  Estimated: "
-            f"{humanize.naturalsize(result.plan.estimated_reclaimable_bytes, binary=True)}"
+            translate("  Estimated: {naturalsize}").format(
+                naturalsize=format_size(
+                    result.plan.estimated_reclaimable_bytes, binary=True
+                ),
+            )
         )
         click.echo(
-            "  Validated: "
-            f"{humanize.naturalsize(result.plan.validated_reclaimable_bytes, binary=True)}"
+            translate("  Validated: {naturalsize}").format(
+                naturalsize=format_size(
+                    result.plan.validated_reclaimable_bytes, binary=True
+                ),
+            )
         )
         click.echo(
-            "  Actual reclaimed: "
-            f"{humanize.naturalsize(result.plan.actual_reclaimed_bytes, binary=True)}"
+            translate("  Actual reclaimed: {naturalsize}").format(
+                naturalsize=format_size(
+                    result.plan.actual_reclaimed_bytes, binary=True
+                ),
+            )
         )
         if any(action.undo_available for action in result.plan.actions):
-            click.echo(f"  Undo: disktide cleanup undo {result.plan.id}")
+            click.echo(
+                translate("  Undo: disktide cleanup undo {id}").format(
+                    id=result.plan.id
+                )
+            )
         for item in result.plan.actions:
             if item.error:
                 click.echo(f"  {item.path}: {item.error}", err=True)
@@ -2784,13 +3296,11 @@ def cleanup_plan(
     "--by",
     "history_group",
     type=click.Choice(["category", "pack", "path"]),
-    help="Group cleanup savings history",
+    help=translate("Group cleanup savings history"),
 )
 @click.option("--json", "json_output", is_flag=True, help="Emit machine-readable JSON")
 def cleanup_history(history_group: str | None, json_output: bool) -> None:
     """List recorded cleanup plans, or grouped savings with --by."""
-
-    import humanize
 
     from disktide.domain.cleanup import cleanup_plan_to_dict
 
@@ -2803,17 +3313,30 @@ def cleanup_history(history_group: str | None, json_output: bool) -> None:
                     _json_dumps([item.to_dict() for item in summaries], sort_keys=True)
                 )
             elif not summaries:
-                click.echo("No cleanup savings history recorded.")
+                click.echo(translate("No cleanup savings history recorded."))
             else:
-                click.echo(f"Cleanup savings history grouped by {history_group}:")
+                click.echo(
+                    translate(
+                        "Cleanup savings history grouped by {history_group}:"
+                    ).format(
+                        history_group=status_label(history_group),
+                    )
+                )
                 for item in summaries:
                     click.echo(
-                        f"{item.key:<28} {item.action_count:>3} actions  "
-                        f"estimated {humanize.naturalsize(item.estimated_bytes, binary=True):>9}  "
-                        f"isolated {humanize.naturalsize(item.isolated_bytes, binary=True):>9}  "
-                        f"purged {humanize.naturalsize(item.purged_bytes, binary=True):>9}  "
-                        f"actual {humanize.naturalsize(item.actual_reclaimed_bytes, binary=True):>9}  "
-                        f"undone {humanize.naturalsize(item.undone_bytes, binary=True):>9}"
+                        translate(
+                            "{key} {action_count} actions  estimated {naturalsize}  isolated "
+                            "{naturalsize_}  purged {naturalsize__}  actual {naturalsize___}  undone "
+                            "{naturalsize____}"
+                        ).format(
+                            key=f"{item.key:<28}",
+                            action_count=f"{item.action_count:>3}",
+                            naturalsize=f"{format_size(item.estimated_bytes, binary=True):>9}",
+                            naturalsize_=f"{format_size(item.isolated_bytes, binary=True):>9}",
+                            naturalsize__=f"{format_size(item.purged_bytes, binary=True):>9}",
+                            naturalsize___=f"{format_size(item.actual_reclaimed_bytes, binary=True):>9}",
+                            naturalsize____=f"{format_size(item.undone_bytes, binary=True):>9}",
+                        )
                     )
             return
 
@@ -2821,15 +3344,25 @@ def cleanup_history(history_group: str | None, json_output: bool) -> None:
         if json_output:
             click.echo(_json_dumps([cleanup_plan_to_dict(item) for item in plans]))
         elif not plans:
-            click.echo("No cleanup plans recorded.")
+            click.echo(translate("No cleanup plans recorded."))
         else:
             for item in plans:
                 click.echo(
-                    f"{item.id}  {item.status.value:<9}  "
-                    f"{len(item.active_actions):>3} targets  "
-                    f"estimated {humanize.naturalsize(item.estimated_reclaimable_bytes, binary=True)}  "
-                    f"actual {humanize.naturalsize(item.actual_reclaimed_bytes, binary=True)}  "
-                    f"{item.scan_root}"
+                    translate(
+                        "{id}  {value}  {len} targets  estimated {naturalsize}  actual {naturalsize_}"
+                        "  {scan_root}"
+                    ).format(
+                        id=item.id,
+                        value=f"{status_label(item.status.value):<9}",
+                        len=f"{len(item.active_actions):>3}",
+                        naturalsize=format_size(
+                            item.estimated_reclaimable_bytes, binary=True
+                        ),
+                        naturalsize_=format_size(
+                            item.actual_reclaimed_bytes, binary=True
+                        ),
+                        scan_root=item.scan_root,
+                    )
                 )
 
 
@@ -2849,15 +3382,24 @@ def cleanup_undo(plan_or_action_id: str, json_output: bool) -> None:
             click.echo(_json_dumps(cleanup_plan_to_dict(result.plan)))
         else:
             click.echo(
-                f"Undo {result.plan.id}: restored {len(result.completed)} "
-                f"item(s); status {result.plan.status.value}."
+                translate("Undo {id}: restored {len} item(s); status {value}.").format(
+                    id=result.plan.id,
+                    len=len(result.completed),
+                    value=status_label(result.plan.status.value),
+                )
             )
             # Only the errors this undo produced. The plan can also carry
             # an apply-time error on an action undo never looked at, and
             # printing those beside a successful restore read as failures
             # of the restore.
             for action in failed:
-                click.echo(f"  skipped {action.path}: {action.error}", err=True)
+                click.echo(
+                    translate("  skipped {path}: {error}").format(
+                        path=action.path,
+                        error=diagnostic(action.error or ""),
+                    ),
+                    err=True,
+                )
         _fail_if_nothing_happened(result, verb="restore")
 
 
@@ -2870,8 +3412,6 @@ def cleanup_purge(
 ) -> None:
     """Permanently remove quarantined content. This cannot be undone."""
 
-    import humanize
-
     from disktide.domain.cleanup import cleanup_plan_to_dict
 
     config, rule_directory, _ = _cleanup_catalog()
@@ -2881,16 +3421,22 @@ def cleanup_purge(
             plan = repository.get_cleanup_plan_for_action(plan_or_action_id)
         if plan is None:
             raise click.ClickException(
-                f"cleanup plan or action '{plan_or_action_id}' does not exist"
+                translate(
+                    "cleanup plan or action '{plan_or_action_id}' does not exist"
+                ).format(
+                    plan_or_action_id=plan_or_action_id,
+                )
             )
         token = service.purge_confirmation(plan.id)
         if confirm is None:
             click.echo(
-                "PURGE permanently removes quarantined content and cannot be undone.",
+                translate(
+                    "PURGE permanently removes quarantined content and cannot be undone."
+                ),
                 err=True,
             )
             confirm = click.prompt(
-                f'Type "{token}" to continue',
+                translate('Type "{token}" to continue').format(token=token),
                 default="",
                 show_default=False,
             )
@@ -2900,12 +3446,24 @@ def cleanup_purge(
             click.echo(_json_dumps(cleanup_plan_to_dict(result.plan)))
         else:
             click.echo(
-                f"Purge {result.plan.id}: {result.plan.purged_count} purged; "
-                f"actual reclaimed "
-                f"{humanize.naturalsize(result.plan.actual_reclaimed_bytes, binary=True)}."
+                translate(
+                    "Purge {id}: {purged_count} purged; actual reclaimed {naturalsize}."
+                ).format(
+                    id=result.plan.id,
+                    purged_count=result.plan.purged_count,
+                    naturalsize=format_size(
+                        result.plan.actual_reclaimed_bytes, binary=True
+                    ),
+                )
             )
             for action in failed:
-                click.echo(f"  failed {action.path}: {action.error}", err=True)
+                click.echo(
+                    translate("  failed {path}: {error}").format(
+                        path=action.path,
+                        error=action.error,
+                    ),
+                    err=True,
+                )
         _fail_if_nothing_happened(result, verb="purge")
 
 
@@ -2922,13 +3480,21 @@ def _fail_if_nothing_happened(result, *, verb: str) -> None:
     failed = result.failed_this_run
     if failed:
         raise click.ClickException(
-            f"{len(failed)} of {len(result.attempted)} item(s) could not be "
-            f"{'purged' if verb == 'purge' else 'restored'}; see the errors above"
+            translate(
+                "{len} of {len_} item(s) could not be {value}; see the errors above"
+            ).format(
+                len=len(failed),
+                len_=len(result.attempted),
+                value=status_label("purged" if verb == "purge" else "restored"),
+            )
         )
     if not result.completed:
         raise click.ClickException(
-            f"nothing to {verb} for plan {result.plan.id} "
-            f"(status {result.plan.status.value})"
+            translate("nothing to {verb} for plan {id} (status {value})").format(
+                verb=status_label(verb),
+                id=result.plan.id,
+                value=status_label(result.plan.status.value),
+            )
         )
 
 
@@ -2974,11 +3540,22 @@ def cleanup_rules_list(json_output: bool) -> None:
     for pack in catalog.packs:
         state = "enabled" if pack.enabled else "disabled"
         click.echo(
-            f"{pack.name:<12} {state:<8} v{pack.version:<8} "
-            f"{pack.source:<7} {len(pack.rules):>2} rule(s)"
+            translate("{name} {state} v{version} {source} {len} rule(s)").format(
+                name=f"{pack.name:<12}",
+                state=f"{status_label(state):<8}",
+                version=f"{pack.version:<8}",
+                source=f"{status_label(pack.source):<7}",
+                len=f"{len(pack.rules):>2}",
+            )
         )
     for issue in catalog.issues:
-        click.echo(f"INVALID      isolated {issue.path}: {issue.error}", err=True)
+        click.echo(
+            translate("INVALID      isolated {path}: {error}").format(
+                path=issue.path,
+                error=diagnostic(issue.error),
+            ),
+            err=True,
+        )
 
 
 @cleanup_rules.command("validate")
@@ -3008,8 +3585,14 @@ def cleanup_rules_validate(path: str, json_output: bool) -> None:
         click.echo(_json_dumps(payload, sort_keys=True))
     else:
         click.echo(
-            f"VALID {pack.name} v{pack.version} · schema "
-            f"{pack.schema_version} · {len(pack.rules)} rule(s)"
+            translate(
+                "VALID {name} v{version} · schema {schema_version} · {len} rule(s)"
+            ).format(
+                name=pack.name,
+                version=pack.version,
+                schema_version=pack.schema_version,
+                len=len(pack.rules),
+            )
         )
 
 
@@ -3022,7 +3605,11 @@ def _toggle_cleanup_rule_pack(pack_name: str, *, enable: bool) -> None:
     if known_pack is None and not any(
         issue.pack_name == pack_name for issue in catalog.issues
     ):
-        raise click.ClickException(f"unknown cleanup rule pack: {pack_name}")
+        raise click.ClickException(
+            translate("unknown cleanup rule pack: {pack_name}").format(
+                pack_name=pack_name,
+            )
+        )
     disabled = set(config.cleanup.disabled_rule_packs)
     opted_in = set(config.cleanup.enabled_rule_packs)
     # Both halves. A pack that ships `default_enabled = false` is opt-in, so
@@ -3039,7 +3626,10 @@ def _toggle_cleanup_rule_pack(pack_name: str, *, enable: bool) -> None:
     config.cleanup.enabled_rule_packs = sorted(opted_in)
     save_config(config)
     click.echo(
-        f"Cleanup rule pack '{pack_name}' {'enabled' if enable else 'disabled'}."
+        translate("Cleanup rule pack '{pack_name}' {value}.").format(
+            pack_name=pack_name,
+            value="enabled" if enable else "disabled",
+        )
     )
 
 
@@ -3065,8 +3655,6 @@ def cleanup_quarantine() -> None:
 def _run_quarantine_audit(root: str, *, rebuild: bool, json_output: bool) -> None:
     """Audit a quarantine root, optionally rebuilding its ledger first."""
 
-    import humanize
-
     from disktide.cleanup.actions import CleanupExecutionError, QuarantineExecutor
 
     config, _, _ = _cleanup_catalog()
@@ -3082,22 +3670,34 @@ def _run_quarantine_audit(root: str, *, rebuild: bool, json_output: bool) -> Non
         click.echo(_json_dumps(status.to_dict(), sort_keys=True))
         return
     verdict = "MATCH" if status.ledger_matches else "MISMATCH"
-    click.echo(f"Quarantine ledger {verdict}: {status.root}")
     click.echo(
-        f"  Ledger: {status.ledger_items} items / "
-        f"{humanize.naturalsize(status.ledger_bytes, binary=True)}"
+        translate("Quarantine ledger {verdict}: {root}").format(
+            verdict=verdict, root=status.root
+        )
     )
     click.echo(
-        f"  Manifests: {status.manifest_items} items / "
-        f"{humanize.naturalsize(status.manifest_bytes, binary=True)}"
+        translate("  Ledger: {ledger_items} items / {naturalsize}").format(
+            ledger_items=status.ledger_items,
+            naturalsize=format_size(status.ledger_bytes, binary=True),
+        )
     )
-    click.echo(f"  Pending reservations: {status.pending_items}")
+    click.echo(
+        translate("  Manifests: {manifest_items} items / {naturalsize}").format(
+            manifest_items=status.manifest_items,
+            naturalsize=format_size(status.manifest_bytes, binary=True),
+        )
+    )
+    click.echo(
+        translate("  Pending reservations: {pending_items}").format(
+            pending_items=status.pending_items,
+        )
+    )
     if status.rebuilt:
-        click.echo("  Ledger rebuilt from recovery manifests.")
+        click.echo(translate("  Ledger rebuilt from recovery manifests."))
     for recovery in status.recoveries:
-        click.echo(f"  RECOVERED: {recovery}")
+        click.echo(translate("  RECOVERED: {recovery}").format(recovery=recovery))
     for issue in status.issues:
-        click.echo(f"  ISSUE: {issue}")
+        click.echo(translate("  ISSUE: {issue}").format(issue=issue))
 
 
 @cleanup_quarantine.command("audit")
@@ -3116,21 +3716,38 @@ def cleanup_quarantine_rebuild(root: str, json_output: bool) -> None:
     _run_quarantine_audit(root, rebuild=True, json_output=json_output)
 
 
-def _render_cleanup_plan(plan, humanize_module) -> None:
+def _render_cleanup_plan(plan) -> None:
     """Render a stable human-readable CleanupPlan summary."""
-    click.echo(f"\nCleanup plan {plan.id} v{plan.version}")
-    click.echo(f"  Root: {plan.scan_root}")
-    click.echo(f"  Status: {plan.status.value}")
-    click.echo(f"  Planned action: {plan.requested_action.value}")
     click.echo(
-        "  Estimated reclaimable: "
-        f"{humanize_module.naturalsize(plan.estimated_reclaimable_bytes, binary=True)}"
+        translate("\nCleanup plan {id} v{version}").format(
+            id=plan.id, version=plan.version
+        )
+    )
+    click.echo(translate("  Root: {scan_root}").format(scan_root=plan.scan_root))
+    click.echo(
+        translate("  Status: {value}").format(value=status_label(plan.status.value))
     )
     click.echo(
-        f"  Targets: {len(plan.active_actions)} active, "
-        f"{len(plan.actions) - len(plan.active_actions)} subsumed"
+        translate("  Planned action: {value}").format(
+            value=status_label(plan.requested_action.value)
+        )
     )
-    click.echo(f"  Confidence: {plan.confidence:.0%}")
+    click.echo(
+        translate("  Estimated reclaimable: {naturalsize}").format(
+            naturalsize=format_size(plan.estimated_reclaimable_bytes, binary=True),
+        )
+    )
+    click.echo(
+        translate("  Targets: {len} active, {value} subsumed").format(
+            len=len(plan.active_actions),
+            value=len(plan.actions) - len(plan.active_actions),
+        )
+    )
+    click.echo(
+        translate("  Confidence: {confidence}").format(
+            confidence=f"{plan.confidence:.0%}"
+        )
+    )
     for item in plan.actions:
         marker = "subsumed" if item.subsumed_by else item.validation_status.value
         action_policy = (
@@ -3139,13 +3756,31 @@ def _render_cleanup_plan(plan, humanize_module) -> None:
             else item.rule_action_policy.value
         )
         click.echo(
-            f"    [{item.risk.value}/{marker}] {item.path}\n"
-            f"      {item.rule_pack}@{item.rule_pack_version} · "
-            f"{item.category} · age {item.age_days:.1f}d · score {item.score:.1f} · "
-            f"confidence {item.confidence:.0%} · {action_policy}\n"
-            f"      {item.reason}; "
-            f"{humanize_module.naturalsize(item.estimated_reclaimable_bytes, binary=True)}"
-            + (f"; rebuild: {item.rebuild_hint}" if item.rebuild_hint else "")
+            translate(
+                "    [{value}/{marker}] {path}\n      {rule_pack}@{rule_pack_version} · {category} · "
+                "age {age_days}d · score {score} · confidence {confidence} · {action_policy}\n      "
+                "{reason}; {naturalsize}"
+            ).format(
+                value=status_label(item.risk.value),
+                marker=status_label(marker),
+                path=item.path,
+                rule_pack=item.rule_pack,
+                rule_pack_version=item.rule_pack_version,
+                category=status_label(item.category),
+                age_days=f"{item.age_days:.1f}",
+                score=f"{item.score:.1f}",
+                confidence=f"{item.confidence:.0%}",
+                action_policy=translate(action_policy),
+                reason=diagnostic(item.reason),
+                naturalsize=format_size(item.estimated_reclaimable_bytes, binary=True),
+            )
+            + (
+                translate("; rebuild: {rebuild_hint}").format(
+                    rebuild_hint=diagnostic(item.rebuild_hint)
+                )
+                if item.rebuild_hint
+                else ""
+            )
         )
 
 

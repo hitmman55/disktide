@@ -9,6 +9,7 @@ from textual.events import Click, Leave, MouseMove, Resize
 from textual.message import Message
 from textual.strip import Strip
 
+from disktide.i18n import translate
 from disktide.widgets import OpaqueStripMixin
 from textual.widget import Widget
 
@@ -216,8 +217,12 @@ class SunburstView(OpaqueStripMixin, Widget):
             # is cheaper than the alternative -- rebuilding the geometry so
             # the root is the hole -- and answers the same question.
             return (
-                f"{node.name} (this root)\n"
-                f"{metric_text(node, self._metric)} · click to go up"
+                translate(
+                    "{name} (this root)\n{metric_text} · click to go up"
+                ).format(
+                    name=node.name,
+                    metric_text=metric_text(node, self._metric),
+                )
             )
         return f"{node.name}\n{metric_text(node, self._metric)} · {share:.0%}"
 
@@ -337,7 +342,7 @@ class SunburstView(OpaqueStripMixin, Widget):
     def render_content_line(self, y: int) -> Strip:
         if self.size.width < 40 or self.size.height < 12:
             if y == max(0, self.size.height // 2 - 1):
-                message = "Sunburst needs >=40x12; use Tree/Treemap"
+                message = translate("Sunburst needs >=40x12; use Tree/Treemap")
                 return Strip([
                     Segment(
                         message[: self.size.width].center(self.size.width),
@@ -358,7 +363,7 @@ class SunburstView(OpaqueStripMixin, Widget):
         if self._node is not None and not metric_available(self._node, self._metric):
             if y == self.size.height // 2:
                 label = METRIC_NAMES.get(self._metric, self._metric)
-                message = f"{label} unavailable"[: self.size.width]
+                message = translate("{label} unavailable").format(label=label)[: self.size.width]
                 return Strip([
                     Segment(message.center(self.size.width), Style(dim=True))
                 ])

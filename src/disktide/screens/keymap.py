@@ -36,6 +36,7 @@ from textual.geometry import Size
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Static
 
+from disktide.i18n import translate
 from disktide.keys import ALL_IDS, DEFAULT_PRESET, SECTION_ORDER, section_for
 
 # Ids under these prefixes are the spine: same key, same meaning, every
@@ -204,8 +205,8 @@ class KeymapScreen(ModalScreen[None]):
     """
 
     BINDINGS = [
-        Binding("escape", "dismiss", "Close", show=True, id="keymap.close"),
-        Binding("q", "dismiss", "Close", show=False, id="keymap.close_q"),
+        Binding("escape", "dismiss", translate("Close"), show=True, id="keymap.close"),
+        Binding("q", "dismiss", translate("Close"), show=False, id="keymap.close_q"),
     ]
 
     def __init__(self, describes: Screen | None = None) -> None:
@@ -220,7 +221,7 @@ class KeymapScreen(ModalScreen[None]):
         # laid out past the bottom of the dialog and could not be scrolled to.
         dialog = VerticalScroll(id="keymap-dialog")
         dialog.border_title = self._title()
-        dialog.border_subtitle = "esc closes"
+        dialog.border_subtitle = translate("esc closes")
         with dialog:
             spine, sections = self._collect()
             blocks = ([(SPINE_HEADING, spine)] if spine else []) + sections
@@ -232,7 +233,7 @@ class KeymapScreen(ModalScreen[None]):
                 # pushing the mode digits nine columns in.
                 key_width = max((len(key) for key, _ in rows), default=0)
                 classes = "keymap-section" if index else "keymap-section -first"
-                yield Static(heading, classes=classes)
+                yield Static(translate(heading), classes=classes)
                 yield _Rows(rows, key_width)
             yield Static(Text(self._hint()), id="keymap-hint")
 
@@ -258,9 +259,11 @@ class KeymapScreen(ModalScreen[None]):
     def _mode_name(self) -> str:
         under = self._under()
         if under is None:
-            return "This screen"
+            return translate("This screen")
         name = type(under).__name__
-        return _SCREEN_NAMES.get(name) or name.removesuffix("Screen") or "This screen"
+        return translate(
+            _SCREEN_NAMES.get(name) or name.removesuffix("Screen") or "This screen"
+        )
 
     def _collect(
         self,
@@ -321,7 +324,7 @@ class KeymapScreen(ModalScreen[None]):
     # -- rendering ----------------------------------------------------------
 
     def _title(self) -> str:
-        return f"Key map — {self._mode_name()}"
+        return translate("Key map — {mode}").format(mode=self._mode_name())
 
     def _hint(self) -> str:
         preset = getattr(self.app, "_config", None)
@@ -332,12 +335,16 @@ class KeymapScreen(ModalScreen[None]):
         # and a three-line footnote under it reads as content. `esc closes`
         # is not here because it rides in the border.
         lines = [
-            f"^p finds any command · preset: {name} · remap in config.toml [keys]"
+            translate(
+                "^p finds any command · preset: {name} · remap in config.toml [keys]"
+            ).format(name=name)
         ]
         if self._has_function_keys():
             lines.append(
-                "F-keys: browsers claim F1/F3/F5 — use ^p, or tab to the "
-                "chart tabs and ←/→"
+                translate(
+                    "F-keys: browsers claim F1/F3/F5 — use ^p, or tab to the "
+                    "chart tabs and ←/→"
+                )
             )
         return "\n".join(lines)
 

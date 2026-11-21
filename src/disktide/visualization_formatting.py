@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import humanize
 
 from disktide.domain.metrics import MetricId
 from disktide.domain.visualization import VisualDelta, VisualState
+from disktide.i18n import format_size, translate
 from disktide.rendering import is_safe_rendering
 
 
@@ -33,14 +33,11 @@ _TOKENS = {
 
 def visual_token(state: VisualState) -> VisualToken:
     token = _TOKENS[state]
-    if is_safe_rendering():
-        return VisualToken(
-            token.label,
-            token.safe_glyph,
-            token.safe_glyph,
-            token.color,
-        )
-    return token
+    glyph = token.safe_glyph if is_safe_rendering() else token.glyph
+    label = translate(token.label)
+    if label == token.label and glyph == token.glyph:
+        return token
+    return VisualToken(label, glyph, token.safe_glyph, token.color)
 
 
 def confidence_prefix(visual: VisualDelta) -> str:
@@ -65,7 +62,7 @@ def format_visual_delta(visual: VisualDelta, metric: MetricId | str) -> str:
         value = f"{visual.delta:+,}"
     else:
         sign = "+" if visual.delta > 0 else "-" if visual.delta < 0 else ""
-        value = sign + humanize.naturalsize(abs(visual.delta), binary=True)
+        value = sign + format_size(abs(visual.delta), binary=True)
     percent = "" if visual.percent is None else f" ({visual.percent:+.1f}%)"
     return f"{hedge}{token.glyph} {value}{percent}"
 

@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable, Protocol
 
+from disktide.i18n import diagnostic, status_label, translate
 from disktide._compat import StrEnum
 from disktide.collectors.events.base import (
     EventBackend,
@@ -388,7 +389,7 @@ class MonitorService:
         self._emit(
             MonitorEventKind.DEFINITION_CHANGED,
             created.id,
-            f"created monitor {created.label}",
+            translate("created monitor {label}").format(label=created.label),
         )
         with self._condition:
             self._condition.notify_all()
@@ -406,7 +407,10 @@ class MonitorService:
         self._emit(
             MonitorEventKind.DEFINITION_CHANGED,
             updated.id,
-            f"updated monitor {updated.label} to revision {updated.revision}",
+            translate("updated monitor {label} to revision {revision}").format(
+                label=updated.label,
+                revision=updated.revision,
+            ),
         )
         with self._condition:
             self._condition.notify_all()
@@ -429,7 +433,7 @@ class MonitorService:
         self._emit(
             MonitorEventKind.DEFINITION_CHANGED,
             monitor.id,
-            f"paused monitor {monitor.label}",
+            translate("paused monitor {label}").format(label=monitor.label),
         )
         return updated
 
@@ -446,7 +450,7 @@ class MonitorService:
         self._emit(
             MonitorEventKind.DEFINITION_CHANGED,
             monitor.id,
-            f"resumed monitor {monitor.label}",
+            translate("resumed monitor {label}").format(label=monitor.label),
         )
         with self._condition:
             self._condition.notify_all()
@@ -469,7 +473,9 @@ class MonitorService:
         self._emit(
             MonitorEventKind.DEFINITION_CHANGED,
             monitor.id,
-            f"archived monitor {monitor.label}; history retained",
+            translate("archived monitor {label}; history retained").format(
+                label=monitor.label
+            ),
         )
         return archived
 
@@ -628,7 +634,9 @@ class MonitorService:
         self._emit(
             MonitorEventKind.HOST_CHANGED,
             None,
-            f"{self._host_type} session started",
+            translate("{_host_type} session started").format(
+                _host_type=self._host_type
+            ),
         )
         return self._host_id
 
@@ -711,7 +719,9 @@ class MonitorService:
         self._emit(
             MonitorEventKind.HOST_CHANGED,
             None,
-            f"{self._host_type} session stopped",
+            translate("{_host_type} session stopped").format(
+                _host_type=self._host_type
+            ),
         )
 
     def shutdown(self, *, wait: bool = True) -> None:
@@ -749,7 +759,7 @@ class MonitorService:
             self._emit(
                 MonitorEventKind.RUN_QUEUED,
                 monitor.id,
-                "manual run queued",
+                translate("manual run queued"),
             )
             return None
         return self._execute_definition(
@@ -791,7 +801,7 @@ class MonitorService:
             self._emit(
                 MonitorEventKind.RUN_QUEUED,
                 monitor.id,
-                "full reconciliation queued",
+                translate("full reconciliation queued"),
             )
             return None
         return self._execute_definition(
@@ -992,11 +1002,8 @@ class MonitorService:
         self._emit(
             MonitorEventKind.WATCH_CHANGED,
             None,
-            (
-                f"{event.kind.value}: {event.detail}"
-                if event.detail
-                else f"{event.kind.value}: {event.path}"
-            ),
+            f"{status_label(event.kind.value)}: "
+            f"{diagnostic(event.detail) if event.detail else event.path}",
         )
 
     def _execute_transient_local_reconciliation(
@@ -1034,7 +1041,9 @@ class MonitorService:
         self._emit(
             MonitorEventKind.RECONCILIATION_FINISHED,
             None,
-            f"locally reconciled {len(batch.paths)} transient dirty path(s)",
+            translate("locally reconciled {len} transient dirty path(s)").format(
+                len=len(batch.paths),
+            ),
         )
         return tuple(runs)
 
@@ -1052,7 +1061,10 @@ class MonitorService:
         self._emit(
             MonitorEventKind.RETENTION_COMPLETED,
             monitor.id,
-            f"retention {result.status}: pruned {result.pruned}",
+            translate("retention {status}: pruned {pruned}").format(
+                status=result.status,
+                pruned=result.pruned,
+            ),
         )
         return result
 
@@ -1302,7 +1314,7 @@ class MonitorService:
         self._emit(
             MonitorEventKind.RUN_QUEUED,
             monitor_id,
-            f"{trigger.value} run queued",
+            translate("{value} run queued").format(value=trigger.value),
         )
 
         request = ScanRequest(
@@ -1348,7 +1360,7 @@ class MonitorService:
             self._emit(
                 MonitorEventKind.RUN_FINISHED,
                 monitor_id,
-                run.error_message or "run validation failed",
+                run.error_message or translate("run validation failed"),
                 run_id=run.run_id,
             )
             return MonitorRunResult(definition, trigger, run)
@@ -1387,8 +1399,11 @@ class MonitorService:
                     MonitorEventKind.RUN_QUEUED,
                     monitor_id,
                     (
-                        f"run {run.run_id[:8]} queued #{event.position}: "
-                        f"{event.reason}"
+                        translate("run {value} queued #{position}: {reason}").format(
+                            value=run.run_id[:8],
+                            position=event.position,
+                            reason=event.reason,
+                        )
                     ),
                     run_id=run.run_id,
                 )
@@ -1413,8 +1428,10 @@ class MonitorService:
                     MonitorEventKind.RUN_STARTED,
                     monitor_id,
                     (
-                        f"run {run.run_id[:8]} started with "
-                        f"{status.effective_workers or '?'} worker(s)"
+                        translate("run {value} started with {value_} worker(s)").format(
+                            value=run.run_id[:8],
+                            value_=status.effective_workers or "?",
+                        )
                     ),
                     run_id=run.run_id,
                 )
@@ -1429,7 +1446,7 @@ class MonitorService:
                 self._emit(
                     MonitorEventKind.RUN_PROGRESS,
                     monitor_id,
-                    "scan progress",
+                    translate("scan progress"),
                     run_id=run.run_id,
                     progress_percent=event.progress.percent,
                     current_path=event.progress.current_path,
@@ -1475,7 +1492,7 @@ class MonitorService:
                             self._emit(
                                 MonitorEventKind.SNAPSHOT_SAVED,
                                 monitor_id,
-                                f"snapshot {snapshot.id} saved",
+                                translate("snapshot {id} saved").format(id=snapshot.id),
                                 run_id=run.run_id,
                                 snapshot_id=snapshot.id,
                             )
@@ -1527,7 +1544,12 @@ class MonitorService:
                                 self._emit(
                                     MonitorEventKind.RETENTION_COMPLETED,
                                     monitor_id,
-                                    f"retention {retention.status}: pruned {retention.pruned}",
+                                    translate(
+                                        "retention {status}: pruned {pruned}"
+                                    ).format(
+                                        status=retention.status,
+                                        pruned=retention.pruned,
+                                    ),
                                 )
                         except Exception as exc:
                             persistence_error = self._append_error(
@@ -1788,7 +1810,9 @@ class MonitorService:
         self._emit(
             MonitorEventKind.WATCH_CHANGED,
             monitor_id,
-            f"event-assisted monitoring active via {backend.name}",
+            translate("event-assisted monitoring active via {name}").format(
+                name=backend.name
+            ),
         )
 
     def _set_periodic_backend_status(
@@ -2001,9 +2025,8 @@ class MonitorService:
                 self._repository.save_monitor_status(status)
                 self._event_status_write_at[monitor_id] = now_mono
                 watch_message = (
-                    f"{event.kind.value}: {event.detail}"
-                    if event.detail
-                    else f"{event.kind.value}: {event.path}"
+                    f"{status_label(event.kind.value)}: "
+                    f"{diagnostic(event.detail) if event.detail else event.path}"
                 )
         if watch_message is not None:
             self._emit(MonitorEventKind.WATCH_CHANGED, monitor_id, watch_message)
@@ -2399,7 +2422,7 @@ class MonitorService:
                         self._emit(
                             MonitorEventKind.RUN_PROGRESS,
                             monitor_id,
-                            "local reconciliation progress",
+                            translate("local reconciliation progress"),
                             run_id=run.run_id,
                             progress_percent=event.progress.percent,
                             current_path=event.progress.current_path,
@@ -2559,8 +2582,11 @@ class MonitorService:
                 (
                     failure
                     or (
-                        f"provisional current state updated from "
-                        f"{len(batch.paths)} dirty path(s)"
+                        translate(
+                            "provisional current state updated from {len} dirty path(s)"
+                        ).format(
+                            len=len(batch.paths),
+                        )
                     )
                 ),
             )

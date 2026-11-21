@@ -14,12 +14,45 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Iterable
 
-from textual.command import DiscoveryHit, Hit, Hits, Provider
+from rich.align import Align
+from rich.text import Text
+from textual.app import ComposeResult
+from textual.command import (
+    CommandList,
+    CommandPalette,
+    DiscoveryHit,
+    Hit,
+    Hits,
+    Provider,
+)
+from textual.visual import VisualType
+from textual.widgets.option_list import Option
 
+from disktide.i18n import translate
 from disktide.keys import ALL_IDS
 
 if TYPE_CHECKING:
     from textual.dom import DOMNode
+
+
+class _LocalizedCommandList(CommandList):
+    def add_option(
+        self, option: Option | VisualType | None = None
+    ) -> _LocalizedCommandList:
+        # Textual supplies this empty-result row, rather than the providers.
+        if isinstance(option, Option) and option.id == "--no-matches":
+            option = Option(
+                Align.center(Text(translate("No matches found"), style="not bold")),
+                disabled=True,
+                id=option.id,
+            )
+        return super().add_option(option)
+
+
+class LocalizedCommandPalette(CommandPalette):
+    def compose(self) -> ComposeResult:
+        for widget in super().compose():
+            yield _LocalizedCommandList() if isinstance(widget, CommandList) else widget
 
 
 # Actions with no key at all. Archiving a monitor used to be `d` — the same
@@ -71,10 +104,8 @@ class BindingCommands(Provider):
             key = self.app.get_key_display(binding)
             yield title, f"{binding_id}  ·  {key}", _runner(screen, binding.action)
 
-        for title, action, help_text in KEYLESS_ACTIONS.get(
-            type(screen).__name__, ()
-        ):
-            yield title, help_text, _runner(screen, action)
+        for title, action, help_text in KEYLESS_ACTIONS.get(type(screen).__name__, ()):
+            yield translate(title), translate(help_text), _runner(screen, action)
 
     async def search(self, query: str) -> Hits:
         matcher = self.matcher(query)

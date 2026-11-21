@@ -1,6 +1,7 @@
 """Small yes/no confirmation modal."""
 
 from __future__ import annotations
+from disktide.i18n import translate
 
 from textual import events
 from textual.app import ComposeResult
@@ -51,9 +52,9 @@ class ConfirmModal(ModalScreen[bool]):
     # (e.g. the originating key "r" or "q") so the user can press the
     # same key twice to confirm — convenient muscle memory.
     BINDINGS = [
-        Binding("y", "confirm", "Yes", show=True, id="confirm.yes"),
-        Binding("n", "cancel", "No", show=True, id="confirm.no"),
-        Binding("escape", "cancel", "No", show=False, id="confirm.cancel"),
+        Binding("y", "confirm", translate("Yes"), show=True, id="confirm.yes"),
+        Binding("n", "cancel", translate("No"), show=True, id="confirm.no"),
+        Binding("escape", "cancel", translate("No"), show=False, id="confirm.cancel"),
     ]
 
     def __init__(
@@ -81,14 +82,16 @@ class ConfirmModal(ModalScreen[bool]):
         confirm_hint = "y"
         if self._extra_confirm_keys:
             confirm_hint = "/".join(("y",) + self._extra_confirm_keys)
-        hint = f"Press {confirm_hint} to confirm, n/Esc to cancel"
+        hint = translate("Press {confirm_hint} to confirm, n/Esc to cancel").format(
+            confirm_hint=confirm_hint,
+        )
         with Vertical(id="confirm-dialog"):
             yield Static(Text(self._title, style="bold"))
             yield Static(self._message, id="confirm-message")
             yield Static(Text(hint, style="dim"), id="confirm-hint")
             with Horizontal(classes="button-row"):
-                yield Button("Yes", variant="primary", id="btn-yes")
-                yield Button("No", variant="default", id="btn-no")
+                yield Button(translate("Yes"), variant="primary", id="btn-yes")
+                yield Button(translate("No"), variant="default", id="btn-no")
 
     def action_confirm(self) -> None:
         self.dismiss(True)

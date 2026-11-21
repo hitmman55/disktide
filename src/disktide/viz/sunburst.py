@@ -54,6 +54,7 @@ from disktide.domain.metrics import MetricId
 from disktide.models.tree import FSNode
 from disktide.domain.visualization import VisualDelta, VisualState
 from disktide.glyphs import visible_width
+from disktide.i18n import translate
 from disktide.metrics import metric_text
 from disktide.visualization_formatting import (
     format_visual_delta,
@@ -1407,16 +1408,22 @@ def _compute_legend(
         major = [(cat, share) for cat, share in shares if share >= 0.01]
         minor = [(cat, share) for cat, share in shares if share < 0.01]
         entries = [
-            (f"{swatch} {cat} {share:.0%}", cat)
+            (f"{swatch} {translate(cat)} {share:.0%}", cat)
             for cat, share in major
         ][:_LEGEND_MAX_ENTRIES]
         if minor and len(entries) < _LEGEND_MAX_ENTRIES:
-            entries.append((f"{swatch} {len(minor)} more <1%", "other"))
+            entries.append(
+                (
+                    f"{swatch} "
+                    + translate("{count} more <1%").format(count=len(minor)),
+                    "other",
+                )
+            )
         # The index is a *byte* histogram and stays one whatever `t` is
         # switched to -- four of them per directory is memory a scan of a
         # million nodes cannot spend. So the legend says which measure it
         # is quoting rather than silently disagreeing with the arcs.
-        heading = "by bytes"
+        heading = translate("by bytes")
     else:
         categories = {
             file_category(arc.node.name)
@@ -1424,7 +1431,7 @@ def _compute_legend(
             if not arc.node.is_dir
         }
         entries = [
-            (f"{swatch} {cat}", cat)
+            (f"{swatch} {translate(cat)}", cat)
             for cat in CATEGORIES
             if cat in categories
         ][:_LEGEND_MAX_ENTRIES]

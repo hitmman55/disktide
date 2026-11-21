@@ -13,7 +13,7 @@ from textual.widget import Widget
 from textual.widgets import Static, ProgressBar
 from rich.style import Style, StyleType
 from rich.text import Text
-import humanize
+from disktide.i18n import format_size, status_label, translate
 from disktide.rendering import link_arrow
 from disktide.viz.colors import ink
 
@@ -132,7 +132,7 @@ class ScanProgressOverlay(Widget):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._title = Static("Scanning...", id="scan-title")
+        self._title = Static(translate("Scanning..."), id="scan-title")
         self._context_display = Static("", id="scan-context")
         self._path_display = Static("", id="scan-path")
         self._stats = Static("", id="scan-stats")
@@ -298,17 +298,25 @@ class ScanProgressOverlay(Widget):
         if not self.is_scanning:
             return
         elapsed = int(self.HINT_AFTER_SECONDS)
-        workers = "unknown" if self._workers is None else str(self._workers)
+        workers = status_label("unknown") if self._workers is None else str(self._workers)
         if self._workers_mode:
-            workers += f" ({self._workers_mode})"
+            workers += f" ({status_label(self._workers_mode)})"
         text = Text()
         text.append(
-            f"  Still scanning after {elapsed} s · workers {workers}",
+            translate(
+                "  Still scanning after {elapsed} s · workers {workers}"
+            ).format(
+                elapsed=elapsed,
+                workers=workers,
+            ),
             style=ink("warning"),
         )
         text.append(
-            f"\n  More cores free? Press , (Settings) {link_arrow()} Workers, "
-            "then r to rescan.",
+            translate(
+                "\n  More cores free? Press , (Settings) {link_arrow} Workers, then r to rescan."
+            ).format(
+                link_arrow=link_arrow(),
+            ),
             style="dim",
         )
         note = self._host_note()
@@ -329,23 +337,23 @@ class ScanProgressOverlay(Widget):
         for warning in self._warnings:
             if "shared host" in warning:
                 return (
-                    "Shared login node: auto takes only this account's fair "
-                    "share of the idle CPUs."
+                    translate("Shared login node: auto takes only this account's fair "
+                    "share of the idle CPUs.")
                 )
         for warning in self._warnings:
             if "exceeds the ceiling" in warning:
-                return "Your worker count was clamped to this host's ceiling."
+                return translate("Your worker count was clamped to this host's ceiling.")
         return None
 
     def _render_context(self) -> None:
-        title = "Scanning"
+        title = translate("Scanning")
         if self._phase:
-            title += f" · {self._phase}"
+            title += f" · {status_label(self._phase)}"
         if self._run_id:
             title += f" · {self._run_id[:8]}"
         self._title.update(Text(title, style="bold"))
         self._context_display.update(
-            Text(f"  Policy: {self._policy}", style="dim")
+            Text(translate("  Policy: {_policy}").format(_policy=self._policy), style="dim")
             if self._policy else ""
         )
 
@@ -396,15 +404,27 @@ class ScanProgressOverlay(Widget):
         self._path_display.update(Text(f"  {path}", style="dim"))
 
         stats_text = Text()
-        stats_text.append(f"  Dirs: {progress.dirs_scanned:,}", style=ink("link"))
-        stats_text.append(f"  Files: {progress.files_scanned:,}", style=ink("bar"))
+        stats_text.append(translate(
+                              "  Dirs: {dirs_scanned}"
+                          ).format(
+                              dirs_scanned=f'{progress.dirs_scanned:,}',
+                          ), style=ink("link"))
+        stats_text.append(translate(
+                              "  Files: {files_scanned}"
+                          ).format(
+                              files_scanned=f'{progress.files_scanned:,}',
+                          ), style=ink("bar"))
         logical_bytes = getattr(
             progress,
             "logical_bytes",
             getattr(progress, "total_size", 0),
         )
         stats_text.append(
-            f"  Logical: {humanize.naturalsize(logical_bytes, binary=True)}",
+            translate(
+                "  Logical: {naturalsize}"
+            ).format(
+                naturalsize=format_size(logical_bytes, binary=True),
+            ),
             style=ink("warning"),
         )
         queue_depth = getattr(progress, "queue_depth", 0)
@@ -412,16 +432,21 @@ class ScanProgressOverlay(Widget):
         dirs_queued = getattr(progress, "dirs_queued", 0)
         if queue_depth or active_workers or dirs_queued:
             stats_text.append(
-                f"  Queue: {queue_depth:,}/{dirs_queued:,}",
+                translate(
+                    "  Queue: {queue_depth}/{dirs_queued}"
+                ).format(
+                    queue_depth=f'{queue_depth:,}',
+                    dirs_queued=f'{dirs_queued:,}',
+                ),
                 style=ink("accent"),
             )
             stats_text.append(
-                f"  Active: {active_workers:,}",
+                translate("  Active: {active_workers}").format(active_workers=f'{active_workers:,}'),
                 style=ink("link"),
             )
         speed = progress.items_per_second
         if speed > 0:
-            stats_text.append(f"  ({speed:,.0f} items/s)", style="dim")
+            stats_text.append(translate("  ({speed} items/s)").format(speed=f'{speed:,.0f}'), style="dim")
 
         self._stats.update(stats_text)
 
@@ -448,7 +473,7 @@ class ScanProgressOverlay(Widget):
         self._stop_repainting()
         self.is_scanning = False
         selected = run_id or self._run_id
-        label = "Scan partial" if partial else "Scan complete"
+        label = translate("Scan partial") if partial else translate("Scan complete")
         if selected:
             label += f" · {selected[:8]}"
         style = ink("warning_strong") if partial else ink("bar_strong")
@@ -459,7 +484,7 @@ class ScanProgressOverlay(Widget):
         self._stop_repainting()
         self.is_scanning = False
         selected = run_id or self._run_id
-        label = "Scan cancelled"
+        label = translate("Scan cancelled")
         if selected:
             label += f" · {selected[:8]}"
         self._title.update(Text(label, style=ink("warning_strong")))
@@ -469,7 +494,7 @@ class ScanProgressOverlay(Widget):
         self._stop_repainting()
         self.is_scanning = False
         selected = run_id or self._run_id
-        label = "Scan failed"
+        label = translate("Scan failed")
         if selected:
             label += f" · {selected[:8]}"
         self._title.update(Text(label, style=ink("error_strong")))
